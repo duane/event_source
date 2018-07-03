@@ -1,0 +1,21 @@
+[package]
+name = "event_source"
+version = "0.1.0"
+authors = ["Duane Bailey <bailey.d.r@gmail.com>"]
+
+[dependencies]
+serde = "*"
+serde_json = "1.0"
+serde_derive = "*"
+
+[dependencies.chrono]
+version = "0.4"
+features = ["serde"]
+
+[dependencies.uuid]
+version = "0.6"
+features = ["v4"]
+
+[dependencies.rusqlite]
+version = "0.13.0"
+features = ["bundled", "chrono", "serde_json", "trace"]

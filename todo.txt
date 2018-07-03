@@ -1,0 +1,4 @@
+* Explicitly enumerate errors
+* move aggregate id to use uuid as well -- easier to generate randomly.
+* standardize using immutable references everywhere. If this is a pain in the ass, use Cow.
+* build the projection with the dispatcher, not by manually querying the database

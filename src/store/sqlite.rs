@@ -22,6 +22,7 @@ impl SqliteStore {
           commit_number     INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
           commit_timestamp  DATETIME NOT NULL,
           events_count      INTEGER NOT NULL,
+          metadata          BLOB NOT NULL,
           events            BLOB NOT NULL,
           dispatched        INTEGER NOT NULL DEFAULT 0
         );
@@ -85,8 +86,9 @@ impl Store for SqliteStore {
             commit_timestamp,
             commit_sequence,
             events_count,
+            metadata,
             events
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )?;
         statement.execute(&[
           &commit_attempt.aggregate_id,
@@ -95,6 +97,7 @@ impl Store for SqliteStore {
           &commit_attempt.commit_timestamp,
           &commit_attempt.commit_sequence,
           &commit_attempt.events_count,
+          &commit_attempt.serialized_metadata,
           &commit_attempt.serialized_events,
         ])?;
         statement.finalize()?;
@@ -119,6 +122,7 @@ impl Store for SqliteStore {
           commit_sequence,
           commit_number,
           events_count,
+          metadata,
           events,
           dispatched
         FROM commits
@@ -137,8 +141,9 @@ impl Store for SqliteStore {
           commit_sequence: row.get(4),
           commit_number: row.get(5),
           events_count: row.get(6),
-          serialized_events: row.get(7),
-          dispatched: row.get(8),
+          serialized_metadata: row.get(7),
+          serialized_events: row.get(8),
+          dispatched: row.get(9),
         }
       })?
       .map(|row| row.unwrap())
@@ -156,6 +161,7 @@ impl Store for SqliteStore {
           commit_sequence,
           commit_number,
           events_count,
+          metadata,
           events,
           dispatched
         FROM commits
@@ -174,8 +180,9 @@ impl Store for SqliteStore {
           commit_sequence: row.get(4),
           commit_number: row.get(5),
           events_count: row.get(6),
-          serialized_events: row.get(7),
-          dispatched: row.get(8),
+          serialized_metadata: row.get(7),
+          serialized_events: row.get(8),
+          dispatched: row.get(9),
         }
       })?
       .map(|rows| {
@@ -204,6 +211,7 @@ impl Store for SqliteStore {
           commit_sequence,
           commit_number,
           events_count,
+          metadata,
           events,
           dispatched
         FROM commits
@@ -220,8 +228,9 @@ impl Store for SqliteStore {
         commit_sequence: row.get(4),
         commit_number: row.get(5),
         events_count: row.get(6),
-        serialized_events: row.get(7),
-        dispatched: row.get(8),
+        serialized_metadata: row.get(7),
+        serialized_events: row.get(8),
+        dispatched: row.get(9),
       }
     })?;
     Ok(commit)
@@ -244,6 +253,7 @@ mod tests {
       commit_sequence: 0,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
@@ -263,6 +273,7 @@ mod tests {
       commit_sequence: commit_attempt.commit_sequence + 1,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"there\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt2).unwrap(), 2);
@@ -290,6 +301,7 @@ mod tests {
       commit_sequence: 0,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
@@ -309,6 +321,7 @@ mod tests {
       commit_sequence: commit_attempt.commit_sequence,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"there\"]").into_bytes(),
     };
 
@@ -328,6 +341,7 @@ mod tests {
       commit_sequence: 0,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
@@ -347,6 +361,7 @@ mod tests {
       commit_sequence: commit_attempt.commit_sequence + 1,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"there\"]").into_bytes(),
     };
     assert_eq!(
@@ -365,6 +380,7 @@ mod tests {
       commit_sequence: 0,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
@@ -384,6 +400,7 @@ mod tests {
       commit_sequence: commit_attempt.commit_sequence + 1,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"there\"]").into_bytes(),
     };
 

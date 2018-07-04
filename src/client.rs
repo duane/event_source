@@ -126,29 +126,41 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
     Ok((*self.aggregate).clone())
   }
 
-  pub fn issue_command<C: Command<Aggregate = A>>(
+  pub fn issue_command<C: Command<Aggregate = A>, M: Serialize>(
     &mut self,
     aggregate: &mut A,
     command: &C,
+    metadata: &M,
   ) -> Result<Commit, Either<ClientError<S::Error>, C::Error>> {
     let aggregate_update_events: Vec<A::Event> = command.apply(aggregate).map_err(Either::Right)?;
-    let mut buffer = Vec::<u8>::new();
+    let mut events_buffer = Vec::<u8>::new();
+    let mut metadata_buffer = Vec::<u8>::new();
     let events_count = aggregate_update_events.len() as i64;
 
     {
-      let mut serializer = JsonSerializer::new(&mut buffer);
+      let mut events_serializer = JsonSerializer::new(&mut events_buffer);
       aggregate_update_events
-        .serialize(&mut serializer)
+        .serialize(&mut events_serializer)
         .map_err(ClientError::SerializationError)
         .map_err(Either::Left)?;
     }
+
+    {
+      let mut metadata_serializer = JsonSerializer::new(&mut metadata_buffer);
+      metadata
+        .serialize(&mut metadata_serializer)
+        .map_err(ClientError::SerializationError)
+        .map_err(Either::Left)?;
+    }
+
     let commit_attempt = CommitAttempt {
       aggregate_id: self.aggregate.id(),
       aggregate_version: self.aggregate.version(),
       commit_id: Uuid::new_v4(),
       commit_timestamp: Utc::now(),
       commit_sequence: self.commit_sequence + 1,
-      serialized_events: buffer,
+      serialized_metadata: metadata_buffer,
+      serialized_events: events_buffer,
       events_count,
     };
     self
@@ -257,6 +269,7 @@ mod tests {
       commit_sequence: 0,
       commit_timestamp: Utc::now(),
       events_count: 1,
+      serialized_metadata: String::from("\"metadata\"").into_bytes(),
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert!(client.commit(&commit_attempt).is_ok());

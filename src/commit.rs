@@ -10,6 +10,7 @@ pub struct Commit {
   pub commit_sequence: i64,
   pub commit_number: i64,
   pub serialized_events: Vec<u8>,
+  pub serialized_metadata: Vec<u8>,
   pub events_count: i64,
   pub dispatched: bool,
 }
@@ -21,6 +22,7 @@ pub struct CommitAttempt {
   pub commit_id: Uuid,
   pub commit_timestamp: DateTime<Utc>,
   pub commit_sequence: i64,
+  pub serialized_metadata: Vec<u8>,
   pub serialized_events: Vec<u8>,
   pub events_count: i64,
 }

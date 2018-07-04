@@ -2,7 +2,7 @@ use super::commit::Commit;
 use super::store::*;
 
 pub trait DispatchDelegate {
-  fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<String>>;
+  fn dispatch(&mut self, commit: &Commit) -> Result<(), String>;
 }
 
 pub struct Dispatcher<D: DispatchDelegate> {
@@ -16,7 +16,7 @@ impl<D: DispatchDelegate> Dispatcher<D> {
     }
   }
 
-  pub fn dispatch<S: Store>(&mut self, store: &mut S) -> Result<(), Box<String>> {
+  pub fn dispatch<S: Store>(&mut self, store: &mut S) -> Result<(), String> {
     let commits = store
       .get_undispatched_commits()
       .map_err(|err| err.to_string())?;

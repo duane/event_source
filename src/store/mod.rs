@@ -12,36 +12,31 @@ pub enum StorageCommitConflict {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum CommitErrorType {
-  DuplicateCommitError(StorageCommitConflict),
-  SerializationError,
+pub enum StoreErrorType {
+  DuplicateWriteError(StorageCommitConflict),
   UnknownError,
 }
 
 #[derive(Debug)]
-pub struct CommitError {
-  pub error_type: CommitErrorType,
-  pub cause: Box<Error>,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum QueryErrorType {
-  UnknownError,
-}
-
-#[derive(Debug)]
-pub struct QueryError {
-  pub error_type: QueryErrorType,
-  pub cause: Box<Error>,
+pub struct StoreError<E: Error> {
+  pub error_type: StoreErrorType,
+  pub cause: E,
 }
 
 pub trait Store {
-  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, CommitError>;
-  fn get_range(&mut self, aggregate_id: i64, min_version: i64, max_version: i64) -> Result<Vec<Commit>, Box<Error>>;
-  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<Error>>;
-  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<Error>>;
-  fn list_aggregate_ids(&mut self) -> Result<Vec<i64>, Box<Error>>;
-  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<Error>>;
+  type UnderlyingStoreError: Error;
+  type Error: Error = StoreError<Self::UnderlyingStoreError>;
+
+  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error>;
+  fn get_range(
+    &mut self,
+    aggregate_id: i64,
+    min_version: i64,
+    max_version: i64,
+  ) -> Result<Vec<Commit>, Self::Error>;
+  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Self::Error>;
+  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Self::Error>;
+  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Self::Error>;
 }
 
 impl fmt::Display for StorageCommitConflict {
@@ -54,73 +49,39 @@ impl fmt::Display for StorageCommitConflict {
   }
 }
 
-impl fmt::Display for CommitErrorType {
+impl fmt::Display for StoreErrorType {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      &CommitErrorType::DuplicateCommitError(ref conflict) => {
-        write!(f, "DuplicateCommitError({})", conflict)
+      &StoreErrorType::DuplicateWriteError(ref conflict) => {
+        write!(f, "DuplicateWriteError({})", conflict)
       }
-      &CommitErrorType::SerializationError => write!(f, "SerializationError"),
-      &CommitErrorType::UnknownError => write!(f, "UnknownError"),
+      &StoreErrorType::UnknownError => write!(f, "UnknownError"),
     }
   }
 }
 
-impl fmt::Display for CommitError {
+impl<E: Error> fmt::Display for StoreError<E> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(
       f,
-      "CommitError(error_type: {}, cause: {:?})",
+      "StoreError(error_type: {}, cause: {:?})",
       self.error_type, self.cause
     )
   }
 }
 
-impl Error for CommitError {
+impl<E: Error> Error for StoreError<E> {
   fn description(&self) -> &str {
-    "An error that occurs when commiting to the event store"
+    "An error that occurs when interacting with the persistence layer of the event store."
   }
 
   fn cause(&self) -> Option<&Error> {
-    // TODO: figure out how to return a boxed error here.
-    None
+    Some(&self.cause)
   }
 }
 
-impl CommitError {
-  pub fn new(error_type: CommitErrorType, cause: Box<Error>) -> Self {
-    CommitError { error_type, cause, }
-  }
-}
-
-impl fmt::Display for QueryErrorType {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "UnknownError")
-  }
-}
-
-impl Error for QueryError {
-  fn description(&self) -> &str {
-    "An error that occurs when querying the event store"
-  }
-
-  fn cause(&self) -> Option<&Error> {
-    None
-  }
-}
-
-impl fmt::Display for QueryError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(
-      f,
-      "QueryError(error_type: {}, cause: {:?})",
-      self.error_type, self.cause
-    )
-  }
-}
-
-impl QueryError {
-  pub fn new(error_type: QueryErrorType, cause: Box<Error>) -> Self {
-    QueryError { error_type, cause, }
+impl<E: Error> StoreError<E> {
+  pub fn new(error_type: StoreErrorType, cause: E) -> Self {
+    StoreError { error_type, cause }
   }
 }

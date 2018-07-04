@@ -3,11 +3,14 @@ use chrono::Utc;
 use command::Command;
 use commit::*;
 use dispatch::*;
+use either::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Deserializer as JsonDeserializer;
+use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
 use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use store::*;
 use uuid::Uuid;
 
@@ -15,6 +18,37 @@ pub struct ClientBuilder<A: Aggregate, D: DispatchDelegate, S: Store> {
   store: Option<Box<S>>,
   dispatcher: Option<Dispatcher<D>>,
   aggregate: Option<Box<A>>,
+}
+
+#[derive(Debug)]
+pub enum ClientError<Se: Error> {
+  SerializationError(JsonError),
+  StoreError(Se),
+}
+
+impl<Se: Error> Display for ClientError<Se> {
+  fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
+    write!(fmt, "{:?}", self)
+  }
+}
+
+impl<'a, T: Error> Error for ClientError<T> {
+  fn description(&self) -> &'static str {
+    "This error type represents any error that can come from a client function."
+  }
+
+  fn cause(&self) -> Option<&Error> {
+    match self {
+      &ClientError::SerializationError(ref err) => Some(err),
+      &ClientError::StoreError(ref err) => Some(err as &Error),
+    }
+  }
+}
+
+impl<T: Error> From<JsonError> for ClientError<T> {
+  fn from(error: JsonError) -> Self {
+    ClientError::SerializationError(error)
+  }
 }
 
 pub struct Client<A: Aggregate, D: DispatchDelegate, S: Store> {
@@ -66,22 +100,24 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> ClientBuilder<A, D, S> {
     })
   }
 }
+
 impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
-  pub fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, CommitError> {
+  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, S::Error> {
     let commit_number = self.store.commit(commit_attempt)?;
     let _unhandled_result = self.dispatcher.dispatch(&mut *self.store);
     Ok(commit_number)
   }
 
-  pub fn fetch_latest(&mut self) -> Result<A, Box<Error>> {
+  pub fn fetch_latest(&mut self) -> Result<A, ClientError<S::Error>> {
     let commits: Vec<Commit> = {
       self
         .store
-        .get_range(self.aggregate.id(), self.commit_sequence, i64::max_value())?
+        .get_range(self.aggregate.id(), self.commit_sequence, i64::max_value())
+        .map_err(ClientError::StoreError)?
     };
     for commit in commits.into_iter() {
       let mut deserializer = JsonDeserializer::from_slice(commit.serialized_events.as_slice());
-      let events = Vec::<A::Event>::deserialize(&mut deserializer).map_err(Box::new)?;
+      let events = Vec::<A::Event>::deserialize(&mut deserializer)?;
       for event in events.iter() {
         self.aggregate = self.aggregate.apply(event);
       }
@@ -94,14 +130,17 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
     &mut self,
     aggregate: &mut A,
     command: &C,
-  ) -> Result<Commit, Box<Error>> {
-    let aggregate_update_events: Vec<A::Event> = command.apply(aggregate).unwrap();
+  ) -> Result<Commit, Either<ClientError<S::Error>, C::Error>> {
+    let aggregate_update_events: Vec<A::Event> = command.apply(aggregate).map_err(Either::Right)?;
     let mut buffer = Vec::<u8>::new();
     let events_count = aggregate_update_events.len() as i64;
 
     {
       let mut serializer = JsonSerializer::new(&mut buffer);
-      aggregate_update_events.serialize(&mut serializer).unwrap();
+      aggregate_update_events
+        .serialize(&mut serializer)
+        .map_err(ClientError::SerializationError)
+        .map_err(Either::Left)?;
     }
     let commit_attempt = CommitAttempt {
       aggregate_id: self.aggregate.id(),
@@ -112,8 +151,11 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
       serialized_events: buffer,
       events_count,
     };
-    let _commit_number = self.commit(&commit_attempt).unwrap();
-    Ok(self.store.get_commit(&commit_attempt.commit_id).unwrap())
+    self
+      .commit(&commit_attempt)
+      .and_then(|_| self.store.get_commit(&commit_attempt.commit_id))
+      .map_err(ClientError::StoreError)
+      .map_err(Either::Left)
   }
 }
 
@@ -124,7 +166,6 @@ mod tests {
   use super::*;
   use chrono::Utc;
   use std::default::Default;
-  use std::error::Error;
   use uuid::Uuid;
 
   struct MockDispatcher {
@@ -132,7 +173,7 @@ mod tests {
   }
 
   impl DispatchDelegate for MockDispatcher {
-    fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<Error>> {
+    fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<String>> {
       self.dispatched_id = Some(commit.commit_id);
       Ok(())
     }

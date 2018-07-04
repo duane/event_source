@@ -1,9 +1,8 @@
 use super::commit::Commit;
 use super::store::*;
-use std::error::Error;
 
 pub trait DispatchDelegate {
-  fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<Error>>;
+  fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<String>>;
 }
 
 pub struct Dispatcher<D: DispatchDelegate> {
@@ -17,11 +16,15 @@ impl<D: DispatchDelegate> Dispatcher<D> {
     }
   }
 
-  pub fn dispatch<S: Store>(&mut self, store: &mut S) -> Result<(), Box<Error>> {
-    let commits = store.get_undispatched_commits()?;
+  pub fn dispatch<S: Store>(&mut self, store: &mut S) -> Result<(), Box<String>> {
+    let commits = store
+      .get_undispatched_commits()
+      .map_err(|err| err.to_string())?;
     for commit in commits.into_iter() {
       (*self.dispatch_delegate).dispatch(&commit)?;
-      store.mark_commit_as_dispatched(commit.commit_id)?;
+      store
+        .mark_commit_as_dispatched(commit.commit_id)
+        .map_err(|err| err.to_string())?;
     }
     Ok(())
   }

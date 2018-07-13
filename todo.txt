@@ -1,4 +1,3 @@
-* move aggregate id to use uuid as well -- easier to generate randomly
 * standardize using immutable references everywhere. If this is a pain in the ass, use Cow
 * learn how to profile cloning.
 * Test for deduping of signs by category id when adding an association.

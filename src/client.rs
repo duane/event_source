@@ -128,7 +128,7 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
 
   pub fn issue_command<C: Command<Aggregate = A>, M: Serialize>(
     &mut self,
-    aggregate: &mut A,
+    aggregate: &A,
     command: &C,
     metadata: &M,
   ) -> Result<Commit, Either<ClientError<S::Error>, C::Error>> {

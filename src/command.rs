@@ -7,6 +7,6 @@ pub trait Command {
 
   fn apply(
     &self,
-    aggregate: &mut Self::Aggregate,
+    aggregate: &Self::Aggregate,
   ) -> Result<Vec<<<Self as Command>::Aggregate as Aggregate>::Event>, Self::Error>;
 }

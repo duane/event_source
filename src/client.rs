@@ -185,7 +185,7 @@ mod tests {
   }
 
   impl DispatchDelegate for MockDispatcher {
-    fn dispatch(&mut self, commit: &Commit) -> Result<(), Box<String>> {
+    fn dispatch(&mut self, commit: &Commit) -> Result<(), String> {
       self.dispatched_id = Some(commit.commit_id);
       Ok(())
     }
@@ -200,7 +200,7 @@ mod tests {
 
   #[derive(Default, Clone)]
   struct MockAggregate {
-    id: i64,
+    id: Uuid,
     version: i64,
   }
 
@@ -217,7 +217,7 @@ mod tests {
       self.version
     }
 
-    fn id(&self) -> i64 {
+    fn id(&self) -> Uuid {
       self.id
     }
   }
@@ -263,7 +263,7 @@ mod tests {
       .unwrap();
     let commit_id = Uuid::new_v4();
     let commit_attempt = CommitAttempt {
-      aggregate_id: 1,
+      aggregate_id: Uuid::new_v4(),
       aggregate_version: 0,
       commit_id,
       commit_sequence: 0,

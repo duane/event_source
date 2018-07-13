@@ -15,7 +15,7 @@ impl SqliteStore {
       .conn
       .execute_batch(
         "CREATE TABLE IF NOT EXISTS commits (
-          aggregate_id      INTEGER NOT NULL,
+          aggregate_id      VARCHAR(36) NOT NULL,
           aggregate_version INTEGER NOT NULL,
           commit_id         VARCHAR(36) NOT NULL,
           commit_sequence   INTEGER NOT NULL,
@@ -91,7 +91,7 @@ impl Store for SqliteStore {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )?;
         statement.execute(&[
-          &commit_attempt.aggregate_id,
+          &commit_attempt.aggregate_id.to_string(),
           &commit_attempt.aggregate_version,
           &commit_attempt.commit_id.to_string(),
           &commit_attempt.commit_timestamp,
@@ -109,7 +109,7 @@ impl Store for SqliteStore {
 
   fn get_range(
     &mut self,
-    aggregate_id: i64,
+    aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
   ) -> Result<Vec<Commit>, Self::Error> {
@@ -131,21 +131,25 @@ impl Store for SqliteStore {
         AND aggregate_id = ?;",
     )?;
     let rows = stmt
-      .query_map(&[&min_version, &max_version, &aggregate_id], |row| {
-        let uuid_str: String = row.get(2);
-        Commit {
-          aggregate_id: row.get(0),
-          aggregate_version: row.get(1),
-          commit_id: Uuid::parse_str(uuid_str.as_ref()).unwrap(),
-          commit_timestamp: row.get(3),
-          commit_sequence: row.get(4),
-          commit_number: row.get(5),
-          events_count: row.get(6),
-          serialized_metadata: row.get(7),
-          serialized_events: row.get(8),
-          dispatched: row.get(9),
-        }
-      })?
+      .query_map(
+        &[&min_version, &max_version, &aggregate_id.to_string()],
+        |row| {
+          let aggregate_id_str: String = row.get(0);
+          let commit_id_str: String = row.get(2);
+          Commit {
+            aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref()).unwrap(),
+            aggregate_version: row.get(1),
+            commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
+            commit_timestamp: row.get(3),
+            commit_sequence: row.get(4),
+            commit_number: row.get(5),
+            events_count: row.get(6),
+            serialized_metadata: row.get(7),
+            serialized_events: row.get(8),
+            dispatched: row.get(9),
+          }
+        },
+      )?
       .map(|row| row.unwrap())
       .collect();
     Ok(rows)
@@ -170,12 +174,14 @@ impl Store for SqliteStore {
     )?;
     let rows = stmt
       .query_map(&[], |row| {
-        let uuid_str: String = row.get(2);
+        let aggregate_id_str: String = row.get(0);
+        let commit_id_str: String = row.get(2);
         Commit {
-          aggregate_id: row.get(0),
+          aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref())
+            .expect("commit_id is not in Uuid format; database may be corrupted."),
           aggregate_version: row.get(1),
-          commit_id: Uuid::parse_str(uuid_str.as_ref())
-            .expect("ID is not in Uuid format; database may be corrupted."),
+          commit_id: Uuid::parse_str(commit_id_str.as_ref())
+            .expect("commit_id is not in Uuid format; database may be corrupted."),
           commit_timestamp: row.get(3),
           commit_sequence: row.get(4),
           commit_number: row.get(5),
@@ -219,9 +225,10 @@ impl Store for SqliteStore {
         ORDER BY commit_number ASC;",
     )?;
     let commit: Commit = statement.query_row(&[&commit_id.to_string()], |row| {
+      let aggregate_id: String = row.get(0);
       let commit_id: String = row.get(2);
       Commit {
-        aggregate_id: row.get(0),
+        aggregate_id: Uuid::parse_str(aggregate_id.as_ref()).unwrap(),
         aggregate_version: row.get(1),
         commit_id: Uuid::parse_str(commit_id.as_ref()).unwrap(),
         commit_timestamp: row.get(3),
@@ -247,7 +254,7 @@ mod tests {
   fn it_allows_storing_and_retrieving_commits() {
     let mut s = sqlite::SqliteStore::with_new_in_memory_connection();
     let commit_attempt = CommitAttempt {
-      aggregate_id: 1,
+      aggregate_id: Uuid::new_v4(),
       aggregate_version: 0,
       commit_id: Uuid::new_v4(),
       commit_sequence: 0,
@@ -257,7 +264,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(1, 0, 2).unwrap();
+    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -267,7 +274,7 @@ mod tests {
     );
 
     let commit_attempt2 = CommitAttempt {
-      aggregate_id: commit_attempt.aggregate_id,
+      aggregate_id: commit_attempt.aggregate_id.clone(),
       aggregate_version: commit_attempt.aggregate_version + 1,
       commit_id: Uuid::new_v4(),
       commit_sequence: commit_attempt.commit_sequence + 1,
@@ -278,7 +285,7 @@ mod tests {
     };
     assert_eq!(s.commit(&commit_attempt2).unwrap(), 2);
 
-    let commits = s.get_range(1, 0, 2).unwrap();
+    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -295,7 +302,7 @@ mod tests {
   fn it_does_not_allow_double_commits_by_sequence() {
     let mut s = sqlite::SqliteStore::with_new_in_memory_connection();
     let commit_attempt = CommitAttempt {
-      aggregate_id: 1,
+      aggregate_id: Uuid::new_v4(),
       aggregate_version: 0,
       commit_id: Uuid::new_v4(),
       commit_sequence: 0,
@@ -305,7 +312,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(1, 0, 2).unwrap();
+    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -335,7 +342,7 @@ mod tests {
   fn it_does_not_allow_double_commits_by_aggregate_version() {
     let mut s = sqlite::SqliteStore::with_new_in_memory_connection();
     let commit_attempt = CommitAttempt {
-      aggregate_id: 1,
+      aggregate_id: Uuid::new_v4(),
       aggregate_version: 0,
       commit_id: Uuid::new_v4(),
       commit_sequence: 0,
@@ -345,7 +352,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(1, 0, 2).unwrap();
+    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -374,7 +381,7 @@ mod tests {
   fn it_does_not_allow_double_commits_by_commit_id() {
     let mut s = sqlite::SqliteStore::with_new_in_memory_connection();
     let commit_attempt = CommitAttempt {
-      aggregate_id: 1,
+      aggregate_id: Uuid::new_v4(),
       aggregate_version: 0,
       commit_id: Uuid::new_v4(),
       commit_sequence: 0,
@@ -384,7 +391,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(1, 0, 2).unwrap();
+    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()

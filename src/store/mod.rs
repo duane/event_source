@@ -30,7 +30,7 @@ pub trait Store {
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error>;
   fn get_range(
     &mut self,
-    aggregate_id: i64,
+    aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
   ) -> Result<Vec<Commit>, Self::Error>;

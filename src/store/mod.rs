@@ -41,21 +41,21 @@ pub trait Store {
 
 impl fmt::Display for StorageCommitConflict {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      &StorageCommitConflict::CommitIdConflict => write!(f, "CommitIdConflict"),
-      &StorageCommitConflict::CommitSequenceConflict => write!(f, "CommitSequenceConflict"),
-      &StorageCommitConflict::AggregateVersionConflict => write!(f, "AggregateVersionConflict"),
+    match *self {
+      StorageCommitConflict::CommitIdConflict => write!(f, "CommitIdConflict"),
+      StorageCommitConflict::CommitSequenceConflict => write!(f, "CommitSequenceConflict"),
+      StorageCommitConflict::AggregateVersionConflict => write!(f, "AggregateVersionConflict"),
     }
   }
 }
 
 impl fmt::Display for StoreErrorType {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      &StoreErrorType::DuplicateWriteError(ref conflict) => {
+    match *self {
+      StoreErrorType::DuplicateWriteError(ref conflict) => {
         write!(f, "DuplicateWriteError({})", conflict)
       }
-      &StoreErrorType::UnknownError => write!(f, "UnknownError"),
+      StoreErrorType::UnknownError => write!(f, "UnknownError"),
     }
   }
 }

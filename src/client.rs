@@ -38,9 +38,9 @@ impl<'a, T: Error> Error for ClientError<T> {
   }
 
   fn cause(&self) -> Option<&Error> {
-    match self {
-      &ClientError::SerializationError(ref err) => Some(err),
-      &ClientError::StoreError(ref err) => Some(err as &Error),
+    match *self {
+      ClientError::SerializationError(ref err) => Some(err),
+      ClientError::StoreError(ref err) => Some(err as &Error),
     }
   }
 }
@@ -58,15 +58,17 @@ pub struct Client<A: Aggregate, D: DispatchDelegate, S: Store> {
   pub commit_sequence: i64,
 }
 
-impl<A: Aggregate, D: DispatchDelegate, S: Store> ClientBuilder<A, D, S> {
-  pub fn new() -> ClientBuilder<A, D, S> {
+impl<A: Aggregate, D: DispatchDelegate, S: Store> Default for ClientBuilder<A, D, S> {
+  fn default() -> ClientBuilder<A, D, S> {
     ClientBuilder {
-      store: None,
-      dispatcher: None,
       aggregate: None,
+      dispatcher: None,
+      store: None,
     }
   }
+}
 
+impl<A: Aggregate, D: DispatchDelegate, S: Store> ClientBuilder<A, D, S> {
   pub fn with_aggregate(mut self, aggregate: Box<A>) -> ClientBuilder<A, D, S> {
     self.aggregate = Some(aggregate);
     self
@@ -115,11 +117,11 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
         .get_range(self.aggregate.id(), self.commit_sequence, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
-    for commit in commits.into_iter() {
+    for commit in commits {
       let mut deserializer = JsonDeserializer::from_slice(commit.serialized_events.as_slice());
       let events = Vec::<A::Event>::deserialize(&mut deserializer)?;
-      for event in events.iter() {
-        self.aggregate = self.aggregate.apply(event);
+      for event in events {
+        self.aggregate = self.aggregate.apply(&event);
       }
       self.commit_sequence = commit.commit_sequence;
     }

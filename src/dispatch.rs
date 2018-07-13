@@ -20,7 +20,7 @@ impl<D: DispatchDelegate> Dispatcher<D> {
     let commits = store
       .get_undispatched_commits()
       .map_err(|err| err.to_string())?;
-    for commit in commits.into_iter() {
+    for commit in commits {
       (*self.dispatch_delegate).dispatch(&commit)?;
       store
         .mark_commit_as_dispatched(commit.commit_id)

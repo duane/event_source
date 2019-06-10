@@ -1,46 +1,20 @@
 use super::super::commit::{Commit, CommitAttempt};
 use super::{StorageCommitConflict, Store, StoreError, StoreErrorType};
-use rusqlite::{Connection, Error as RusqliteError};
+use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError};
 use std::path::Path;
 use uuid::Uuid;
 
 pub struct SqliteStore {
-  conn: Connection,
+  conn: RusqliteConnection,
 }
 
 impl SqliteStore {
-  fn with_connection(conn: Connection) -> Self {
-    let store = SqliteStore { conn };
-    store
-      .conn
-      .execute_batch(
-        "CREATE TABLE IF NOT EXISTS commits (
-          aggregate_id      VARCHAR(36) NOT NULL,
-          aggregate_version INTEGER NOT NULL,
-          commit_id         VARCHAR(36) NOT NULL,
-          commit_sequence   INTEGER NOT NULL,
-          commit_number     INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-          commit_timestamp  DATETIME NOT NULL,
-          events_count      INTEGER NOT NULL,
-          metadata          BLOB NOT NULL,
-          events            BLOB NOT NULL,
-          dispatched        INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
-        CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
-        CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sequence_idx ON commits (aggregate_id, commit_sequence);
-        CREATE INDEX IF NOT EXISTS commits_dispatched_idx ON commits (dispatched);"
-      )
-      .unwrap();
-    store
-  }
-
   pub fn with_new_in_memory_connection() -> Self {
-    Self::with_connection(Connection::open_in_memory().unwrap())
+    Self::with_connection(RusqliteConnection::open_in_memory().unwrap())
   }
 
   pub fn with_new_connection_at_path(path: &Path) -> Self {
-    Self::with_connection(Connection::open(path).unwrap())
+    Self::with_connection(RusqliteConnection::open(path).unwrap())
   }
 }
 
@@ -74,6 +48,11 @@ impl From<RusqliteError> for StoreError<RusqliteError> {
 impl Store for SqliteStore {
   type UnderlyingStoreError = RusqliteError;
   type Error = StoreError<RusqliteError>;
+  type Connection = RusqliteConnection;
+
+  fn with_connection(connection: Self::Connection) -> Self {
+    SqliteStore { conn: connection }
+  }
 
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error> {
     {

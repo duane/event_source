@@ -26,7 +26,9 @@ pub struct StoreError<E: Error> {
 pub trait Store {
   type UnderlyingStoreError: Error;
   type Error: Error = StoreError<Self::UnderlyingStoreError>;
+  type Connection;
 
+  fn with_connection(connection: Self::Connection) -> Self;
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error>;
   fn get_range(
     &mut self,

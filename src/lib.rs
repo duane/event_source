@@ -9,6 +9,13 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
+extern crate futures;
+extern crate pretty_env_logger;
+#[macro_use]
+extern crate log;
+extern crate chashmap;
+extern crate hyper;
+extern crate tokio_timer;
 extern crate uuid;
 extern crate warp;
 

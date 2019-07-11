@@ -14,10 +14,9 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use store::*;
 use uuid::Uuid;
 
-pub struct ClientBuilder<A: Aggregate, D: DispatchDelegate, S: Store> {
-  store: Option<Box<S>>,
+pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
+  store: Option<S>,
   dispatcher: Option<Dispatcher<D>>,
-  aggregate: Option<Box<A>>,
 }
 
 #[derive(Debug)]
@@ -51,90 +50,84 @@ impl<T: Error> From<JsonError> for ClientError<T> {
   }
 }
 
-pub struct Client<A: Aggregate, D: DispatchDelegate, S: Store> {
+pub struct Client<D: DispatchDelegate, S: Store> {
   pub dispatcher: Dispatcher<D>,
-  pub store: Box<S>,
-  pub aggregate: Box<A>,
+  pub store: S,
   pub commit_sequence: i64,
 }
 
-impl<A: Aggregate, D: DispatchDelegate, S: Store> Default for ClientBuilder<A, D, S> {
-  fn default() -> ClientBuilder<A, D, S> {
+impl<D: DispatchDelegate, S: Store> Default for ClientBuilder<D, S> {
+  fn default() -> ClientBuilder<D, S> {
     ClientBuilder {
-      aggregate: None,
       dispatcher: None,
       store: None,
     }
   }
 }
 
-impl<A: Aggregate, D: DispatchDelegate, S: Store> ClientBuilder<A, D, S> {
-  pub fn with_aggregate(mut self, aggregate: Box<A>) -> ClientBuilder<A, D, S> {
-    self.aggregate = Some(aggregate);
-    self
-  }
-
-  pub fn with_store(mut self, s: Box<S>) -> ClientBuilder<A, D, S> {
+impl<D: DispatchDelegate, S: Store> ClientBuilder<D, S> {
+  pub fn with_store(mut self, s: S) -> ClientBuilder<D, S> {
     self.store = Some(s);
     self
   }
 
-  pub fn with_dispatch_delegate(mut self, delegate: Box<D>) -> ClientBuilder<A, D, S> {
+  pub fn with_dispatch_delegate(mut self, delegate: D) -> ClientBuilder<D, S> {
     self.dispatcher = Some(Dispatcher::new(delegate));
     self
   }
 
-  pub fn finish(self) -> Result<Client<A, D, S>, &'static str> {
+  pub fn finish(self) -> Result<Client<D, S>, &'static str> {
     if self.store.is_none() {
       return Err("Cannot build a client; missing a store.");
     }
     if self.dispatcher.is_none() {
       return Err("Cannot build a client; missing a dispatcher.");
     }
-    if self.aggregate.is_none() {
-      return Err("Cannot build a client; missing an aggregate id.");
-    }
     Ok(Client {
       store: self.store.unwrap(),
       dispatcher: self.dispatcher.unwrap(),
-      aggregate: self.aggregate.unwrap(),
       commit_sequence: 0,
     })
   }
 }
 
-impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
+impl<D: DispatchDelegate, S: Store> Client<D, S> {
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, S::Error> {
     let commit_number = self.store.commit(commit_attempt)?;
-    let _unhandled_result = self.dispatcher.dispatch(&mut *self.store);
+    let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
     Ok(commit_number)
   }
 
-  pub fn fetch_latest(&mut self) -> Result<A, ClientError<S::Error>> {
+  pub fn fetch_latest<A: Aggregate>(
+    &mut self,
+    aggregate_id: Uuid,
+  ) -> Result<A, ClientError<S::Error>> {
     let commits: Vec<Commit> = {
       self
         .store
-        .get_range(self.aggregate.id(), self.commit_sequence, i64::max_value())
+        .get_range(aggregate_id, self.commit_sequence, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
+    let mut aggregate: A = Default::default();
     for commit in commits {
       let mut deserializer = JsonDeserializer::from_slice(commit.serialized_events.as_slice());
       let events = Vec::<A::Event>::deserialize(&mut deserializer)?;
       for event in events {
-        self.aggregate = self.aggregate.apply(&event);
+        aggregate = aggregate.apply(&event);
       }
       self.commit_sequence = commit.commit_sequence;
     }
-    Ok((*self.aggregate).clone())
+    Ok(aggregate)
   }
 
-  pub fn issue_command<C: Command<Aggregate = A>, M: Serialize>(
+  pub fn issue_command<C: Command, M: Serialize>(
     &mut self,
-    aggregate: &A,
+    aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
   ) -> Result<Commit, Either<ClientError<S::Error>, C::Error>> {
-    let aggregate_update_events: Vec<A::Event> = command.apply(aggregate).map_err(Either::Right)?;
+    let aggregate_update_events: Vec<<<C as Command>::Aggregate as Aggregate>::Event> =
+      command.apply(aggregate).map_err(Either::Right)?;
     let mut events_buffer = Vec::<u8>::new();
     let mut metadata_buffer = Vec::<u8>::new();
     let events_count = aggregate_update_events.len() as i64;
@@ -156,8 +149,8 @@ impl<A: Aggregate, D: DispatchDelegate, S: Store> Client<A, D, S> {
     }
 
     let commit_attempt = CommitAttempt {
-      aggregate_id: self.aggregate.id(),
-      aggregate_version: self.aggregate.version(),
+      aggregate_id: aggregate.id(),
+      aggregate_version: aggregate.version(),
       commit_id: Uuid::new_v4(),
       commit_timestamp: Utc::now(),
       commit_sequence: self.commit_sequence + 1,

@@ -10,6 +10,12 @@ serde_derive = "*"
 either = "*"
 dotenv = "*"
 warp = "*"
+futures = "*"
+log = "*"
+chashmap = "*"
+pretty_env_logger = "*"
+tokio-timer = "*"
+hyper = "*"
 
 [dependencies.chrono]
 version = "0.4"

@@ -1,7 +1,8 @@
 use super::aggregate::Aggregate;
 use std::error::Error;
+use std::fmt::Debug;
 
-pub trait Command {
+pub trait Command: Send + Sync + Clone + Debug {
   type Aggregate: Aggregate;
   type Error: Error;
 

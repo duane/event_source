@@ -87,7 +87,7 @@ impl Store for SqliteStore {
   }
 
   fn get_range(
-    &mut self,
+    &self,
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,

@@ -6,7 +6,6 @@ use dispatch::DispatchDelegate;
 use futures::future::join_all;
 use futures::stream::Stream;
 use futures::sync::mpsc;
-use hyper::rt;
 use serde::Serialize;
 use serde_json::Serializer as JsonSerializer;
 use std::str::from_utf8;

@@ -18,13 +18,13 @@ tokio-timer = "*"
 hyper = "*"
 
 [dependencies.chrono]
-version = "0.4"
+version = "*"
 features = ["serde"]
 
 [dependencies.uuid]
-version = "0.6"
+version = "*"
 features = ["v4", "serde"]
 
 [dependencies.rusqlite]
-version = "0.13.0"
+version = "*"
 features = ["bundled", "chrono", "serde_json", "trace"]

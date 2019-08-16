@@ -1,6 +1,6 @@
 use super::super::commit::{Commit, CommitAttempt};
 use super::{StorageCommitConflict, Store, StoreError, StoreErrorType};
-use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError};
+use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::path::Path;
 use uuid::Uuid;
 
@@ -71,7 +71,7 @@ impl Store for SqliteStore {
         )?;
         statement.execute(&[
           &commit_attempt.aggregate_id.to_string(),
-          &commit_attempt.aggregate_version,
+          &commit_attempt.aggregate_version as &dyn ToSql,
           &commit_attempt.commit_id.to_string(),
           &commit_attempt.commit_timestamp,
           &commit_attempt.commit_sequence,
@@ -111,22 +111,26 @@ impl Store for SqliteStore {
     )?;
     let rows = stmt
       .query_map(
-        &[&min_version, &max_version, &aggregate_id.to_string()],
+        &[
+          &min_version,
+          &max_version,
+          &aggregate_id.to_string() as &dyn ToSql,
+        ],
         |row| {
-          let aggregate_id_str: String = row.get(0);
-          let commit_id_str: String = row.get(2);
-          Commit {
+          let aggregate_id_str: String = row.get(0).expect("no aggregate_id result column");
+          let commit_id_str: String = row.get(2).expect("no commit_id result column");
+          Ok(Commit {
             aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref()).unwrap(),
-            aggregate_version: row.get(1),
+            aggregate_version: row.get(1).expect("no aggregate_version result column"),
             commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
-            commit_timestamp: row.get(3),
-            commit_sequence: row.get(4),
-            commit_number: row.get(5),
-            events_count: row.get(6),
-            serialized_metadata: row.get(7),
-            serialized_events: row.get(8),
-            dispatched: row.get(9),
-          }
+            commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
+            commit_sequence: row.get(4).expect("no commit_sequence result column"),
+            commit_number: row.get(5).expect("no commit_number result column"),
+            events_count: row.get(6).expect("no events_count result column"),
+            serialized_metadata: row.get(7).expect("no serialized_metadat result column"),
+            serialized_events: row.get(8).expect("no serialized_events result column"),
+            dispatched: row.get(9).expect("no dispatched result column"),
+          })
         },
       )?
       .map(|row| row.unwrap())
@@ -152,23 +156,23 @@ impl Store for SqliteStore {
         ORDER BY commit_number ASC;",
     )?;
     let rows = stmt
-      .query_map(&[], |row| {
-        let aggregate_id_str: String = row.get(0);
-        let commit_id_str: String = row.get(2);
-        Commit {
+      .query_map(&vec![] as &Vec<&dyn ToSql>, |row| {
+        let aggregate_id_str: String = row.get(0).expect("no aggregate_id column in result");
+        let commit_id_str: String = row.get(2).expect("no commit_id column in result");
+        Ok(Commit {
           aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref())
             .expect("commit_id is not in Uuid format; database may be corrupted."),
-          aggregate_version: row.get(1),
+          aggregate_version: row.get(1).expect("no aggregate_version column in result"),
           commit_id: Uuid::parse_str(commit_id_str.as_ref())
             .expect("commit_id is not in Uuid format; database may be corrupted."),
-          commit_timestamp: row.get(3),
-          commit_sequence: row.get(4),
-          commit_number: row.get(5),
-          events_count: row.get(6),
-          serialized_metadata: row.get(7),
-          serialized_events: row.get(8),
-          dispatched: row.get(9),
-        }
+          commit_timestamp: row.get(3).expect("no commit_timestamp column in result"),
+          commit_sequence: row.get(4).expect("no commit_sequence column in result"),
+          commit_number: row.get(5).expect("no commit_number column in result"),
+          events_count: row.get(6).expect("no events_count column in result"),
+          serialized_metadata: row.get(7).expect("no serialized_metadata column in result"),
+          serialized_events: row.get(8).expect("no serialized_events column in result"),
+          dispatched: row.get(9).expect("no dispatched column in result"),
+        })
       })?
       .map(|rows| {
         rows.expect("Could not read from commits row. If the schema has changed, update the store to read from the appropriate format.")
@@ -204,20 +208,28 @@ impl Store for SqliteStore {
         ORDER BY commit_number ASC;",
     )?;
     let commit: Commit = statement.query_row(&[&commit_id.to_string()], |row| {
-      let aggregate_id: String = row.get(0);
-      let commit_id: String = row.get(2);
-      Commit {
+      let aggregate_id: String = row.get(0).expect("no aggregate_id column in result row");
+      let commit_id: String = row.get(2).expect("no commit_id column in result row");
+      Ok(Commit {
         aggregate_id: Uuid::parse_str(aggregate_id.as_ref()).unwrap(),
-        aggregate_version: row.get(1),
+        aggregate_version: row
+          .get(1)
+          .expect("no aggregate_version column in result row"),
         commit_id: Uuid::parse_str(commit_id.as_ref()).unwrap(),
-        commit_timestamp: row.get(3),
-        commit_sequence: row.get(4),
-        commit_number: row.get(5),
-        events_count: row.get(6),
-        serialized_metadata: row.get(7),
-        serialized_events: row.get(8),
-        dispatched: row.get(9),
-      }
+        commit_timestamp: row
+          .get(3)
+          .expect("no commit_timestamp column in result row"),
+        commit_sequence: row.get(4).expect("no commit_sequence column in result row"),
+        commit_number: row.get(5).expect("no commit_number column in result row"),
+        events_count: row.get(6).expect("no events_count column in result row"),
+        serialized_metadata: row
+          .get(7)
+          .expect("no serialized_metadata column in result row"),
+        serialized_events: row
+          .get(8)
+          .expect("no serialized_events column in result row"),
+        dispatched: row.get(9).expect("no dispatched column in result row"),
+      })
     })?;
     Ok(commit)
   }

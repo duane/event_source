@@ -36,10 +36,10 @@ impl<'a, T: Error> Error for ClientError<T> {
     "This error type represents any error that can come from a client function."
   }
 
-  fn cause(&self) -> Option<&Error> {
+  fn cause(&self) -> Option<&dyn Error> {
     match *self {
       ClientError::SerializationError(ref err) => Some(err),
-      ClientError::StoreError(ref err) => Some(err as &Error),
+      ClientError::StoreError(ref err) => Some(err as &dyn Error),
     }
   }
 }
@@ -201,11 +201,16 @@ mod tests {
 
   impl Aggregate for MockAggregate {
     type Event = MockEvent;
-    fn apply(&self, _event: &Self::Event) -> Box<MockAggregate> {
-      Box::new(MockAggregate {
+
+    fn with_id(id: Uuid) -> Self {
+      MockAggregate { id, version: 0 }
+    }
+
+    fn apply(&self, _event: &Self::Event) -> MockAggregate {
+      MockAggregate {
         id: self.id,
         version: self.version + 1,
-      })
+      }
     }
 
     fn version(&self) -> i64 {
@@ -219,26 +224,24 @@ mod tests {
 
   #[test]
   fn it_requires_store_and_dispatcher() {
-    assert!(
-      ClientBuilder::<MockAggregate, MockDispatcher, SqliteStore>::new()
-        .finish()
-        .is_err()
-    );
+    assert!(ClientBuilder::<MockDispatcher, SqliteStore>::default()
+      .finish()
+      .is_err());
     let dispatch_delegate = MockDispatcher {
       dispatched_id: None,
     };
     assert_eq!(
       "Cannot build a client; missing a store.",
-      ClientBuilder::<MockAggregate, MockDispatcher, SqliteStore>::new()
-        .with_dispatch_delegate(Box::new(dispatch_delegate))
+      ClientBuilder::<MockDispatcher, SqliteStore>::default()
+        .with_dispatch_delegate(dispatch_delegate)
         .finish()
         .err()
         .unwrap()
     );
     assert_eq!(
       "Cannot build a client; missing a dispatcher.",
-      ClientBuilder::<MockAggregate, MockDispatcher, SqliteStore>::new()
-        .with_store(Box::new(SqliteStore::with_new_in_memory_connection()))
+      ClientBuilder::<MockDispatcher, SqliteStore>::default()
+        .with_store(SqliteStore::with_new_in_memory_connection())
         .finish()
         .err()
         .unwrap()
@@ -250,10 +253,9 @@ mod tests {
     let dispatch_delegate = MockDispatcher {
       dispatched_id: None,
     };
-    let mut client = ClientBuilder::<MockAggregate, MockDispatcher, SqliteStore>::new()
-      .with_store(Box::new(SqliteStore::with_new_in_memory_connection()))
-      .with_dispatch_delegate(Box::new(dispatch_delegate))
-      .with_aggregate(Default::default())
+    let mut client = ClientBuilder::<MockDispatcher, SqliteStore>::default()
+      .with_store(SqliteStore::with_new_in_memory_connection())
+      .with_dispatch_delegate(dispatch_delegate)
       .finish()
       .unwrap();
     let commit_id = Uuid::new_v4();

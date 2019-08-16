@@ -9,7 +9,6 @@ use server::aggregate::commit;
 use server::aggregate::get_latest;
 use server::dispatch::WebSocketSubscriptions;
 use server::store::commit_list;
-use std::sync::Arc;
 use store::Store;
 use warp::Filter;
 

@@ -1,7 +1,7 @@
 use warp::{path, Filter};
 
 use aggregate::Aggregate;
-use client::{Client, ClientBuilder};
+use client::ClientBuilder;
 use command::Command;
 use dispatch::{DispatchDelegate, NullDispatcher};
 use serde::de::DeserializeOwned;

@@ -77,7 +77,7 @@ impl<E: Error> Error for StoreError<E> {
     "An error that occurs when interacting with the persistence layer of the event store."
   }
 
-  fn cause(&self) -> Option<&Error> {
+  fn cause(&self) -> Option<&dyn Error> {
     Some(&self.cause)
   }
 }

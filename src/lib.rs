@@ -1,6 +1,5 @@
 #![feature(associated_type_defaults)]
 #![allow(unknown_lints)]
-#![warn(clippy)]
 
 extern crate chrono;
 extern crate either;

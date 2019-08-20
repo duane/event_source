@@ -5,7 +5,7 @@ authors = ["Duane Bailey <bailey.d.r@gmail.com>"]
 
 [dependencies]
 serde = "*"
-serde_json = "1.0"
+serde_json = "*"
 serde_derive = "*"
 either = "*"
 dotenv = "*"
@@ -16,6 +16,10 @@ chashmap = "*"
 pretty_env_logger = "*"
 tokio-timer = "*"
 hyper = "*"
+tokio = "*"
+rusoto_core = "*"
+rusoto_dynamodb = "*"
+dynomite = "^0.5.1"
 
 [dependencies.chrono]
 version = "*"

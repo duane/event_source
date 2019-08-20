@@ -13,15 +13,16 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 extern crate chashmap;
+extern crate dynomite;
 extern crate hyper;
+extern crate rusoto_core;
+extern crate rusoto_dynamodb;
 extern crate tokio_timer;
 extern crate uuid;
 extern crate warp;
-
-#[cfg(test)]
-#[macro_use]
-extern crate serde_derive;
-
+//#[cfg(test)]
+//#[macro_use]
+//extern crate serde_derive;
 pub mod aggregate;
 pub mod client;
 pub mod command;

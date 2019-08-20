@@ -253,8 +253,10 @@ mod tests {
     let dispatch_delegate = MockDispatcher {
       dispatched_id: None,
     };
+    let store = SqliteStore::with_new_in_memory_connection();
+    store.initialize();
     let mut client = ClientBuilder::<MockDispatcher, SqliteStore>::default()
-      .with_store(SqliteStore::with_new_in_memory_connection())
+      .with_store(store)
       .with_dispatch_delegate(dispatch_delegate)
       .finish()
       .unwrap();

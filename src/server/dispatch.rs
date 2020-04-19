@@ -1,24 +1,23 @@
-use warp::{self, Filter, Future, Sink};
+use warp::{self, Filter, Future};
 
 use chashmap::CHashMap;
 use commit::Commit;
 use dispatch::DispatchDelegate;
-use futures::future::join_all;
-use futures::stream::Stream;
-use futures::sync::mpsc;
 use serde::Serialize;
 use serde_json::Serializer as JsonSerializer;
 use std::str::from_utf8;
+use std::sync::mpsc;
 use std::sync::{
   atomic::{AtomicUsize, Ordering},
   Arc,
 };
 use uuid::Uuid;
 use warp::filters::ws::{Message, WebSocket};
+use warp::Stream;
 
 static SUBSCRIBER_ID: AtomicUsize = AtomicUsize::new(1);
 
-type AggregateMap = Arc<CHashMap<Uuid, CHashMap<usize, mpsc::UnboundedSender<Message>>>>;
+type AggregateMap = Arc<CHashMap<Uuid, CHashMap<usize, mpsc::Sender<Message>>>>;
 
 #[derive(Clone)]
 pub struct WebSocketSubscriptions {
@@ -47,14 +46,14 @@ impl WebSocketSubscriptions {
     let state_handle = Arc::clone(&self.aggregate_map);
     warp::path("commits")
       .and(warp::path::param())
-      .and(warp::ws2())
+      .and(warp::ws())
       .map(move |aggregate_id: Uuid, ws: warp::ws::Ws2| {
         let state_handle = Arc::clone(&state_handle);
         ws.on_upgrade(move |websocket| subscribe(aggregate_id, state_handle, websocket))
       })
   }
 
-  fn publish(&self, commit: Commit) -> impl Future<Item = (), Error = ()> {
+  fn publish(&self, commit: Commit) {
     let option = self.aggregate_map.get(&commit.aggregate_id);
     let mut serialized_buffer = Vec::<u8>::new();
     {
@@ -67,22 +66,16 @@ impl WebSocketSubscriptions {
     match option {
       Some(ref subscriber_map_guard) => {
         let subscriber_map = (*subscriber_map_guard).clone();
-        let futures = subscriber_map.into_iter().map(move |(_, subscriber)| {
+        for (_, subscriber) in subscriber_map.into_iter() {
           subscriber
             .send(Message::text(
               from_utf8(serialized_buffer.as_slice()).unwrap(),
             ))
-            .wait()
-            .map_err(|err| error!("publish error: {:?}", err))
-        });
-        join_all(futures)
+            .unwrap();
+        }
       }
-      None => {
-        unreachable!("No subscriber to contact!");
-      }
-    }
-    .map_err(|_| ())
-    .map(|_| ())
+      None => unreachable!("No subscriber to contact!"),
+    };
   }
 }
 
@@ -103,13 +96,12 @@ fn subscribe(
 ) -> impl Future<Item = (), Error = ()> {
   let subscriber_id = SUBSCRIBER_ID.fetch_add(1, Ordering::Relaxed);
   let (subscriber_ws_tx, subscriber_ws_rx) = websocket.split();
-  let (tx, rx) = mpsc::unbounded();
+  let (tx, rx) = mpsc::channel();
   let tx_clone = tx.clone();
   let after_clone = tx.clone();
   let state_handle = Arc::clone(&aggregate_map);
   warp::spawn(
-    rx.map_err(|()| -> warp::Error { unreachable!("unbounded rx never errors") })
-      .forward(subscriber_ws_tx)
+    rx.forward(subscriber_ws_tx)
       .map(|_tx_rx| ())
       .map_err(|ws_err| error!("websocket send error: {}", ws_err)),
   );

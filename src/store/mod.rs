@@ -1,4 +1,4 @@
-pub mod dynamodb;
+//pub mod dynamodb;
 pub mod sqlite;
 use super::commit::{Commit, CommitAttempt};
 use std::error::Error;

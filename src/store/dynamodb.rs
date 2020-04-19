@@ -2,7 +2,7 @@ extern crate tokio;
 
 use chrono::{DateTime, Utc};
 use commit::{Commit, CommitAttempt};
-use dynomite::{
+/*use dynomite::{
   dynamodb::{
     AttributeDefinition, AttributeValue, CreateTableError, CreateTableInput, DynamoDb,
     DynamoDbClient, GetItemInput, KeySchemaElement,
@@ -10,11 +10,18 @@ use dynomite::{
   },
   retry::{Policy, RetryingDynamoDb},
   FromAttributes, Item,
-};
-use futures::Future;
-use rusoto_core::Region;
+};*/
+use futures::future::Future;
+use futures::{FutureExt, TryFutureExt};
+use rusoto_core::{RusotoFuture, Region};
 use std::collections::HashMap;
 use uuid::Uuid;
+use rusoto_dynamodb::{DynamoDb, DynamoDbClient, AttributeDefinition,
+    KeySchemaElement, CreateTableInput, CreateTableError,
+    ProvisionedThroughput, PutItemInput, PutItemOutput, PutItemError,
+    GetItemInput, QueryInput, AttributeValue};
+use std::str::FromStr;
+use bytes::Bytes;
 
 #[derive(Debug, Clone)]
 pub struct DynamoDbConfig {
@@ -30,7 +37,7 @@ impl Default for DynamoDbConfig {
 }
 
 pub struct DynamoDbStore {
-  pub client: RetryingDynamoDb<DynamoDbClient>,
+  pub client: DynamoDbClient,
   pub config: DynamoDbConfig,
 }
 
@@ -38,20 +45,18 @@ impl Default for DynamoDbStore {
   fn default() -> Self {
     DynamoDbStore {
       config: DynamoDbConfig::default(),
-      client: RetryingDynamoDb::new(DynamoDbClient::new(Region::default()), Policy::default()),
+      client: DynamoDbClient::new(Region::default()),
     }
   }
 }
 
-#[derive(Debug, Clone, Item)]
+#[derive(Debug, Clone)]
 struct CommitDTO {
-  #[hash]
   pub aggregate_id: Uuid,
   pub aggregate_version: i64,
   pub commit_id: Uuid,
   pub commit_timestamp: String,
 
-  #[range]
   pub commit_sequence: i64,
 
   pub serialized_events: Vec<u8>,
@@ -59,10 +64,48 @@ struct CommitDTO {
   pub events_count: i64,
 }
 
+impl CommitDTO {
+  fn from_attrs(attrs: HashMap<String, AttributeValue>) -> Option<Self> {
+    let aggregate_id_str: String = attrs.get("aggregate_id").and_then(|av| av.s).expect("No string field aggregate_id");
+    let aggregate_id: Uuid = Uuid::parse_str(aggregate_id_str.as_str()).unwrap();
+    let aggregate_version: i64 = attrs.get("aggregate_version").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field aggregate_version");
+    let commit_id_str: String = attrs.get("commit_id").and_then(|av| av.s).expect("No string field commit_id");
+    let commit_id: Uuid = Uuid::parse_str(commit_id_str.as_str()).unwrap();
+    let commit_timestamp: String = attrs.get("commit_timestamp").and_then(|av| av.s).expect("No string field commit_timestamp");
+    let commit_sequence: i64 = attrs.get("commit_sequence").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field commit_sequence");
+    let events_count: i64 = attrs.get("events_count").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field events_count");
+    let serialized_events: Vec<u8> = attrs.get("serialized_events").and_then(|av| av.b).map(|b|b.into_iter().collect()).expect("No such bytes field serialized_events");
+    let serialized_metadata: Vec<u8> = attrs.get("serialized_metadata").and_then(|av| av.b).map(|b|b.into_iter().collect()).expect("No such bytes field serialized_metadata");
+    Some(CommitDTO{
+      aggregate_id,
+      aggregate_version,
+      commit_id,
+      commit_timestamp,
+      commit_sequence,
+      serialized_events,
+      serialized_metadata,
+      events_count
+    })
+  }
+
+  fn into(self: Self) -> HashMap<String, AttributeValue> {
+    let mut attr_map: HashMap<String, AttributeValue> = HashMap::new();
+    attr_map.insert(String::from("aggregate_id"), AttributeValue{s: Some(self.aggregate_id.to_string()), ..Default::default()});
+    attr_map.insert(String::from("aggregate_version"), AttributeValue{n: Some(self.aggregate_version.to_string()), ..Default::default()});
+    attr_map.insert(String::from("commit_id"), AttributeValue{s: Some(self.commit_id.to_string()), ..Default::default()});
+    attr_map.insert(String::from("commit_timestamp"), AttributeValue{s: Some(self.commit_timestamp), ..Default::default()});
+    attr_map.insert(String::from("commit_sequence"), AttributeValue{n: Some(self.commit_sequence.to_string()), ..Default::default()});
+    attr_map.insert(String::from("serialized_events"), AttributeValue{b: Some(Bytes::from(self.serialized_events)), ..Default::default()});
+    attr_map.insert(String::from("serialized_metadata"), AttributeValue{b: Some(Bytes::from(self.serialized_metadata)), ..Default::default()});
+    attr_map.insert(String::from("events_count"), AttributeValue{n: Some(self.events_count.to_string()), ..Default::default()});
+    attr_map
+  }
+}
+
 impl DynamoDbStore {
   pub fn initialize(
     &self,
-  ) -> impl Future<Item = (), Error = rusoto_core::RusotoError<CreateTableError>> {
+  ) -> impl Future<Output = Result<(), rusoto_core::RusotoError<CreateTableError>>> {
     let attribute_definitions = vec![
       AttributeDefinition {
         attribute_name: "aggregate_id".into(),
@@ -101,7 +144,7 @@ impl DynamoDbStore {
   pub fn commit(
     &mut self,
     commit_attempt: &CommitAttempt,
-  ) -> impl Future<Item = PutItemOutput, Error = rusoto_core::RusotoError<PutItemError>> {
+  ) -> impl Future<Output = Result<PutItemOutput, rusoto_core::RusotoError<PutItemError>>> {
     let commit_dto = CommitDTO {
       aggregate_id: commit_attempt.aggregate_id,
       aggregate_version: commit_attempt.aggregate_version,
@@ -123,14 +166,14 @@ impl DynamoDbStore {
       return_item_collection_metrics: None,
       return_values: None,
       table_name: self.config.table_name.clone(),
-    })
+    }).into_future()
   }
 
   pub fn get_commit(
     &mut self,
     aggregate_id: Uuid,
     commit_sequence: i64,
-  ) -> impl Future<Item = Option<Commit>, Error = rusoto_core::RusotoError<rusoto_dynamodb::GetItemError>>
+  ) -> impl Future<Output = Result<Option<Commit>, rusoto_core::RusotoError<rusoto_dynamodb::GetItemError>>>
   {
     let mut key: HashMap<String, AttributeValue> = Default::default();
     let mut hash_value: AttributeValue = Default::default();
@@ -174,10 +217,7 @@ impl DynamoDbStore {
     aggregate_id: Uuid,
     min_commit_sequence: i64,
     max_commit_sequence: i64,
-  ) -> impl Future<
-    Item = Option<Vec<Commit>>,
-    Error = rusoto_core::RusotoError<rusoto_dynamodb::QueryError>,
-  > {
+  ) -> impl Future<Output = Result<Option<Vec<Commit>>, rusoto_core::RusotoError<rusoto_dynamodb::QueryError>>> {
     let mut expression_attribute_values: HashMap<String, AttributeValue> = Default::default();
 
     let mut hash_value: AttributeValue = Default::default();
@@ -200,7 +240,7 @@ impl DynamoDbStore {
         expression_attribute_values: Some(expression_attribute_values),
         table_name: self.config.table_name.clone(),
         ..QueryInput::default()
-      })
+      }).into_future()
       .map(|result| {
         result.items.map(|item_vec| {
           item_vec.into_iter().map(|item| {

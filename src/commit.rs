@@ -67,7 +67,7 @@ mod tests {
   use chrono::Utc;
   #[test]
   fn deserialize() {
-    let serialized_events = "[{\"foo\": \"bar\"}, {\"baz\": \"bat\"}]".as_bytes().to_vec();
+    let serialized_events = b"[{\"foo\": \"bar\"}, {\"baz\": \"bat\"}]".to_vec();
     let serialized_metadata = "[{\"foo2\": \"bar2\", \"baz2\": \"bat2\"}]".as_bytes().to_vec();
     let commit = Commit{
       aggregate_id: Uuid::new_v4(),

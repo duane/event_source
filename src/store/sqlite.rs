@@ -287,7 +287,7 @@ mod tests {
     );
 
     let commit_attempt2 = CommitAttempt {
-      aggregate_id: commit_attempt.aggregate_id.clone(),
+      aggregate_id: commit_attempt.aggregate_id,
       aggregate_version: commit_attempt.aggregate_version + 1,
       commit_id: Uuid::new_v4(),
       commit_sequence: commit_attempt.commit_sequence + 1,

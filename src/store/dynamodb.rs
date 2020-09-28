@@ -2,18 +2,10 @@ extern crate tokio;
 
 use chrono::{DateTime, Utc};
 use commit::{Commit, CommitAttempt};
-/*use dynomite::{
-  dynamodb::{
-    AttributeDefinition, AttributeValue, CreateTableError, CreateTableInput, DynamoDb,
-    DynamoDbClient, GetItemInput, KeySchemaElement,
-    ProvisionedThroughput, PutItemError, PutItemInput, PutItemOutput, QueryInput,
-  },
-  retry::{Policy, RetryingDynamoDb},
-  FromAttributes, Item,
-};*/
+
 use futures::future::Future;
 use futures::{FutureExt, TryFutureExt};
-use rusoto_core::{RusotoFuture, Region};
+use rusoto_core::{RusotoError, Region};
 use std::collections::HashMap;
 use uuid::Uuid;
 use rusoto_dynamodb::{DynamoDb, DynamoDbClient, AttributeDefinition,
@@ -66,16 +58,16 @@ struct CommitDTO {
 
 impl CommitDTO {
   fn from_attrs(attrs: HashMap<String, AttributeValue>) -> Option<Self> {
-    let aggregate_id_str: String = attrs.get("aggregate_id").and_then(|av| av.s).expect("No string field aggregate_id");
+    let aggregate_id_str: String = attrs.get("aggregate_id").and_then(|av| av.s.as_ref()).expect("No string field aggregate_id").to_string();
     let aggregate_id: Uuid = Uuid::parse_str(aggregate_id_str.as_str()).unwrap();
-    let aggregate_version: i64 = attrs.get("aggregate_version").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field aggregate_version");
-    let commit_id_str: String = attrs.get("commit_id").and_then(|av| av.s).expect("No string field commit_id");
+    let aggregate_version: i64 = attrs.get("aggregate_version").and_then(|av|av.n.as_ref()).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field aggregate_version");
+    let commit_id_str: String = attrs.get("commit_id").and_then(|av| av.s.as_ref()).expect("No string field commit_id").to_string();
     let commit_id: Uuid = Uuid::parse_str(commit_id_str.as_str()).unwrap();
-    let commit_timestamp: String = attrs.get("commit_timestamp").and_then(|av| av.s).expect("No string field commit_timestamp");
-    let commit_sequence: i64 = attrs.get("commit_sequence").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field commit_sequence");
-    let events_count: i64 = attrs.get("events_count").and_then(|av|av.n).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field events_count");
-    let serialized_events: Vec<u8> = attrs.get("serialized_events").and_then(|av| av.b).map(|b|b.into_iter().collect()).expect("No such bytes field serialized_events");
-    let serialized_metadata: Vec<u8> = attrs.get("serialized_metadata").and_then(|av| av.b).map(|b|b.into_iter().collect()).expect("No such bytes field serialized_metadata");
+    let commit_timestamp: String = attrs.get("commit_timestamp").and_then(|av| av.s.as_ref()).expect("No string field commit_timestamp").to_string();
+    let commit_sequence: i64 = attrs.get("commit_sequence").and_then(|av|av.n.as_ref()).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field commit_sequence");
+    let events_count: i64 = attrs.get("events_count").and_then(|av|av.n.as_ref()).map(|s|i64::from_str(s.as_str()).unwrap()).expect("No number field events_count");
+    let serialized_events: Vec<u8> = attrs.get("serialized_events").and_then(|av| av.b.as_ref()).map(|b|b.into_iter().map(|b| *b).collect()).expect("No such bytes field serialized_events");
+    let serialized_metadata: Vec<u8> = attrs.get("serialized_metadata").and_then(|av| av.b.as_ref()).map(|b|b.into_iter().map(|b| *b).collect()).expect("No such bytes field serialized_metadata");
     Some(CommitDTO{
       aggregate_id,
       aggregate_version,
@@ -105,7 +97,7 @@ impl CommitDTO {
 impl DynamoDbStore {
   pub fn initialize(
     &self,
-  ) -> impl Future<Output = Result<(), rusoto_core::RusotoError<CreateTableError>>> {
+  ) -> impl Future<Output = Result<(), RusotoError<CreateTableError>>> + '_ {
     let attribute_definitions = vec![
       AttributeDefinition {
         attribute_name: "aggregate_id".into(),
@@ -137,14 +129,13 @@ impl DynamoDbStore {
         key_schema,
         table_name: self.config.table_name.clone(),
         ..CreateTableInput::default()
-      })
-      .map(|_| ())
+      }).map(|_| Ok(()))
   }
 
   pub fn commit(
     &mut self,
     commit_attempt: &CommitAttempt,
-  ) -> impl Future<Output = Result<PutItemOutput, rusoto_core::RusotoError<PutItemError>>> {
+  ) -> impl Future<Output = Result<PutItemOutput, RusotoError<PutItemError>>> + '_ {
     let commit_dto = CommitDTO {
       aggregate_id: commit_attempt.aggregate_id,
       aggregate_version: commit_attempt.aggregate_version,
@@ -173,7 +164,7 @@ impl DynamoDbStore {
     &mut self,
     aggregate_id: Uuid,
     commit_sequence: i64,
-  ) -> impl Future<Output = Result<Option<Commit>, rusoto_core::RusotoError<rusoto_dynamodb::GetItemError>>>
+  ) -> impl Future<Output = Result<Option<Commit>, RusotoError<rusoto_dynamodb::GetItemError>>> + '_
   {
     let mut key: HashMap<String, AttributeValue> = Default::default();
     let mut hash_value: AttributeValue = Default::default();
@@ -191,23 +182,25 @@ impl DynamoDbStore {
         ..GetItemInput::default()
       })
       .map(|result| {
-        result.item.map(|item| {
-          let commit_dto = CommitDTO::from_attrs(item).expect("could not parse dynamo db row");
+        result.map(|get_item_output| {
+          get_item_output.item.map(|item| {
+            let commit_dto = CommitDTO::from_attrs(item).expect("could not parse dynamo db row");
 
-          Commit {
-            aggregate_id: commit_dto.aggregate_id,
-            aggregate_version: commit_dto.aggregate_version,
-            commit_id: commit_dto.commit_id,
-            commit_timestamp: DateTime::parse_from_rfc3339(&commit_dto.commit_timestamp)
-              .expect("could not parse timestamp")
-              .with_timezone(&Utc),
-            commit_sequence: commit_dto.commit_sequence,
-            commit_number: commit_dto.commit_sequence, // this is intentional
-            serialized_events: commit_dto.serialized_events,
-            serialized_metadata: commit_dto.serialized_metadata,
-            events_count: commit_dto.events_count,
-            dispatched: true,
-          }
+            Commit {
+              aggregate_id: commit_dto.aggregate_id,
+              aggregate_version: commit_dto.aggregate_version,
+              commit_id: commit_dto.commit_id,
+              commit_timestamp: DateTime::parse_from_rfc3339(&commit_dto.commit_timestamp)
+                .expect("could not parse timestamp")
+                .with_timezone(&Utc),
+              commit_sequence: commit_dto.commit_sequence,
+              commit_number: commit_dto.commit_sequence, // this is intentional
+              serialized_events: commit_dto.serialized_events,
+              serialized_metadata: commit_dto.serialized_metadata,
+              events_count: commit_dto.events_count,
+              dispatched: true,
+            }
+          })
         })
       })
   }
@@ -217,7 +210,7 @@ impl DynamoDbStore {
     aggregate_id: Uuid,
     min_commit_sequence: i64,
     max_commit_sequence: i64,
-  ) -> impl Future<Output = Result<Option<Vec<Commit>>, rusoto_core::RusotoError<rusoto_dynamodb::QueryError>>> {
+  ) -> impl Future<Output = Result<Option<Vec<Commit>>, RusotoError<rusoto_dynamodb::QueryError>>> + '_ {
     let mut expression_attribute_values: HashMap<String, AttributeValue> = Default::default();
 
     let mut hash_value: AttributeValue = Default::default();
@@ -242,25 +235,27 @@ impl DynamoDbStore {
         ..QueryInput::default()
       }).into_future()
       .map(|result| {
-        result.items.map(|item_vec| {
-          item_vec.into_iter().map(|item| {
-            let commit_dto = CommitDTO::from_attrs(item).expect("could not parse dynamo db row");
+        result.map(|query_output| {
+          query_output.items.map(|item_vec| {
+            item_vec.into_iter().map(|item| {
+              let commit_dto = CommitDTO::from_attrs(item).expect("could not parse dynamo db row");
 
-            Commit {
-              aggregate_id: commit_dto.aggregate_id,
-              aggregate_version: commit_dto.aggregate_version,
-              commit_id: commit_dto.commit_id,
-              commit_timestamp: DateTime::parse_from_rfc3339(&commit_dto.commit_timestamp)
-                .expect("could not parse timestamp")
-                .with_timezone(&Utc),
-              commit_sequence: commit_dto.commit_sequence,
-              commit_number: commit_dto.commit_sequence, // this is intentional
-              serialized_events: commit_dto.serialized_events,
-              serialized_metadata: commit_dto.serialized_metadata,
-              events_count: commit_dto.events_count,
-              dispatched: true,
-            }
-          }).collect()
+              Commit {
+                aggregate_id: commit_dto.aggregate_id,
+                aggregate_version: commit_dto.aggregate_version,
+                commit_id: commit_dto.commit_id,
+                commit_timestamp: DateTime::parse_from_rfc3339(&commit_dto.commit_timestamp)
+                  .expect("could not parse timestamp")
+                  .with_timezone(&Utc),
+                commit_sequence: commit_dto.commit_sequence,
+                commit_number: commit_dto.commit_sequence, // this is intentional
+                serialized_events: commit_dto.serialized_events,
+                serialized_metadata: commit_dto.serialized_metadata,
+                events_count: commit_dto.events_count,
+                dispatched: true,
+              }
+            }).collect()
+          })
         })
       })
   }

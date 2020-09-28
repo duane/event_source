@@ -1,5 +1,9 @@
-//pub mod dynamodb;
+#[cfg(feature = "dynamo")]
+pub mod dynamodb;
+
+#[cfg(feature = "sqlite")]
 pub mod sqlite;
+
 use super::commit::{Commit, CommitAttempt};
 use std::error;
 use std::fmt;

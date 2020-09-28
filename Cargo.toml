@@ -12,13 +12,13 @@ sqlite = ["rusqlite"]
 httpd = ["log", "dotenv", "warp", "futures", "tokio-timer", "hyper", "tokio"]
 
 [dependencies]
-bytes = "^0.5.4"
-serde = "~1.0.106"
-serde_json = "~1.0.51"
-serde_derive = "~1.0.106"
-pretty_env_logger = "~0.4.0"
-either = "1.5.3"
-chashmap = "2.2.2"
+bytes = "*"
+serde = "*"
+serde_json = "*"
+serde_derive = "*"
+pretty_env_logger = "*"
+either = "*"
+chashmap = "*"
 
 log = { version = "0.4.8", optional = true }
 dotenv = { version = "0.15.0", optional = true }
@@ -32,14 +32,14 @@ rusoto_core = { version = "~0.43.0", optional = true }
 rusoto_dynamodb = { version = "~0.43.0", optional = true }
 
 [dependencies.chrono]
-version = "~0.4.11"
+version = "*"
 features = ["serde"]
 
 [dependencies.uuid]
-version = "0.8.1"
+version = "*"
 features = ["v4", "serde"]
 
 [dependencies.rusqlite]
-version = "~0.21.0"
+version = "*"
 features = ["bundled", "chrono", "serde_json", "trace"]
 optional = true

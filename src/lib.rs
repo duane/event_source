@@ -1,4 +1,3 @@
-#![feature(associated_type_defaults)]
 #![allow(unknown_lints)]
 
 extern crate bytes;

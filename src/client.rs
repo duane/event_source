@@ -9,8 +9,6 @@ use serde::Serialize;
 use serde_json::Deserializer as JsonDeserializer;
 use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FmtResult};
 use store::*;
 use uuid::Uuid;
 
@@ -20,33 +18,25 @@ pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
 }
 
 #[derive(Debug)]
-pub enum ClientError<Se: Error> {
+pub enum ClientError {
   SerializationError(JsonError),
-  StoreError(Se),
+  StoreError(Box<dyn StoreError>),
 }
 
-impl<Se: Error> Display for ClientError<Se> {
-  fn fmt(&self, fmt: &mut Formatter) -> FmtResult {
-    write!(fmt, "{:?}", self)
-  }
+#[derive(Debug)]
+pub struct ClientJsonError {
+  pub cause: JsonError,
 }
 
-impl<'a, T: Error> Error for ClientError<T> {
-  fn description(&self) -> &'static str {
-    "This error type represents any error that can come from a client function."
-  }
-
-  fn cause(&self) -> Option<&dyn Error> {
-    match *self {
-      ClientError::SerializationError(ref err) => Some(err),
-      ClientError::StoreError(ref err) => Some(err as &dyn Error),
-    }
-  }
-}
-
-impl<T: Error> From<JsonError> for ClientError<T> {
-  fn from(error: JsonError) -> Self {
+impl From<JsonError> for ClientError {
+  fn from(error: JsonError) -> ClientError {
     ClientError::SerializationError(error)
+  }
+}
+
+impl From<Box<dyn StoreError>> for ClientError {
+  fn from(error: Box<dyn StoreError>) -> ClientError {
+    ClientError::StoreError(error)
   }
 }
 
@@ -92,7 +82,7 @@ impl<D: DispatchDelegate, S: Store> ClientBuilder<D, S> {
 }
 
 impl<D: DispatchDelegate, S: Store> Client<D, S> {
-  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, S::Error> {
+  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     let commit_number = self.store.commit(commit_attempt)?;
     let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
     Ok(commit_number)
@@ -101,7 +91,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
   pub fn fetch_latest<A: Aggregate>(
     &mut self,
     aggregate_id: Uuid,
-  ) -> Result<A, ClientError<S::Error>> {
+  ) -> Result<A, ClientError> {
     let commits: Vec<Commit> = {
       self
         .store
@@ -125,7 +115,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
-  ) -> Result<Commit, Either<ClientError<S::Error>, C::Error>> {
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as Aggregate>::Event> =
       command.apply(aggregate).map_err(Either::Right)?;
     let mut events_buffer = Vec::<u8>::new();

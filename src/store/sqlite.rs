@@ -3,9 +3,40 @@ use super::{StorageCommitConflict, Store, StoreError, StoreErrorType};
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::path::Path;
 use uuid::Uuid;
+use std::error::Error;
+use std::fmt;
 
 pub struct SqliteStore {
   conn: RusqliteConnection,
+}
+
+#[derive(Debug)]
+pub struct SqliteStoreError {
+  cause: RusqliteError
+}
+
+impl fmt::Display for SqliteStoreError {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "SqliteStoreError({:}, {:})", self.error_type(), self.cause)
+  }
+}
+
+impl Error for SqliteStoreError {
+  fn source(&self) -> Option<&(dyn Error + 'static)> {
+    Some(&self.cause)
+  }
+}
+
+impl From<RusqliteError> for SqliteStoreError {
+  fn from(cause: RusqliteError) -> Self {
+    SqliteStoreError { cause }
+  }
+}
+
+impl Into<Box<dyn StoreError>> for SqliteStoreError {
+  fn into(self) -> Box<dyn StoreError> {
+    Box::new(self)
+  }
 }
 
 impl SqliteStore {
@@ -39,9 +70,9 @@ impl SqliteStore {
   }
 }
 
-impl From<RusqliteError> for StoreError<RusqliteError> {
-  fn from(error: RusqliteError) -> Self {
-    let error_type = match error {
+impl StoreError for SqliteStoreError { 
+  fn error_type(&self) -> StoreErrorType {
+    match self.cause {
       RusqliteError::SqliteFailure(_, Some(ref msg))
         if msg == "UNIQUE constraint failed: commits.aggregate_id, commits.commit_sequence" =>
       {
@@ -61,24 +92,21 @@ impl From<RusqliteError> for StoreError<RusqliteError> {
         panic!(msg.clone());
       }
       _ => StoreErrorType::UnknownError,
-    };
-    StoreError::new(error_type, error)
+    }
   }
 }
 
 impl Store for SqliteStore {
-  type UnderlyingStoreError = RusqliteError;
-  type Error = StoreError<RusqliteError>;
   type Connection = RusqliteConnection;
 
   fn with_connection(connection: Self::Connection) -> Self {
     SqliteStore { conn: connection }
   }
 
-  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error> {
+  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     {
       {
-        let mut statement = self.conn.prepare(
+        let mut statement = match self.conn.prepare(
           "INSERT INTO commits (
             aggregate_id,
             aggregate_version,
@@ -89,8 +117,11 @@ impl Store for SqliteStore {
             metadata,
             events
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )?;
-        statement.execute(&[
+        ) {
+          Ok(result) => result,
+          Err(err) => return Err(SqliteStoreError::from(err).into()),
+        };
+        match statement.execute(&[
           &commit_attempt.aggregate_id.to_string(),
           &commit_attempt.aggregate_version as &dyn ToSql,
           &commit_attempt.commit_id.to_string(),
@@ -99,8 +130,14 @@ impl Store for SqliteStore {
           &commit_attempt.events_count,
           &commit_attempt.serialized_metadata,
           &commit_attempt.serialized_events,
-        ])?;
-        statement.finalize()?;
+        ]) {
+          Ok(_) => (),
+          Err(err) => return Err(SqliteStoreError::from(err).into()),
+        };
+        match statement.finalize() {
+          Ok(_) => (),
+          Err(err) => return Err(SqliteStoreError::from(err).into()),
+        };
       }
     }
 
@@ -112,8 +149,8 @@ impl Store for SqliteStore {
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<Commit>, Self::Error> {
-    let mut stmt = self.conn.prepare(
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+    let mut stmt = match self.conn.prepare(
       "SELECT
           aggregate_id,
           aggregate_version,
@@ -129,8 +166,11 @@ impl Store for SqliteStore {
         WHERE aggregate_version >= ?
         AND aggregate_version <= ?
         AND aggregate_id = ?;",
-    )?;
-    let rows = stmt
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
+    let rows = match stmt
       .query_map(
         &[
           &min_version,
@@ -153,14 +193,16 @@ impl Store for SqliteStore {
             dispatched: row.get(9).expect("no dispatched result column"),
           })
         },
-      )?
-      .map(|row| row.unwrap())
+      ) {
+        Ok(result) => result,
+        Err(err) => return Err(SqliteStoreError::from(err).into()),
+      }.map(|row| row.unwrap())
       .collect();
     Ok(rows)
   }
 
-  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Self::Error> {
-    let mut stmt = self.conn.prepare(
+  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+    let mut stmt = match self.conn.prepare(
       "SELECT
           aggregate_id,
           aggregate_version,
@@ -175,8 +217,11 @@ impl Store for SqliteStore {
         FROM commits
         WHERE dispatched = 0
         ORDER BY commit_number ASC;",
-    )?;
-    let rows = stmt
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
+    let rows = match stmt
       .query_map(&vec![] as &Vec<&dyn ToSql>, |row| {
         let aggregate_id_str: String = row.get(0).expect("no aggregate_id column in result");
         let commit_id_str: String = row.get(2).expect("no commit_id column in result");
@@ -194,7 +239,10 @@ impl Store for SqliteStore {
           serialized_events: row.get(8).expect("no serialized_events column in result"),
           dispatched: row.get(9).expect("no dispatched column in result"),
         })
-      })?
+      }) {
+        Ok(result) => result,
+        Err(err) => return Err(SqliteStoreError::from(err).into()),
+      }
       .map(|rows| {
         rows.expect("Could not read from commits row. If the schema has changed, update the store to read from the appropriate format.")
       })
@@ -202,17 +250,26 @@ impl Store for SqliteStore {
     Ok(rows)
   }
 
-  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Self::Error> {
-    let mut statement = self
+  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>> {
+    let mut statement = match self
       .conn
-      .prepare("UPDATE commits SET dispatched = 1 WHERE commit_id = ?")?;
-    statement.execute(&[&commit_id.to_string()])?;
-    statement.finalize()?;
+      .prepare("UPDATE commits SET dispatched = 1 WHERE commit_id = ?") {
+        Ok(result) => result,
+        Err(err) => return Err(SqliteStoreError::from(err).into()),
+      };
+    match statement.execute(&[&commit_id.to_string()]) {
+      Ok(_) => (),
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
+    match statement.finalize() {
+      Ok(_) => (),
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
     Ok(())
   }
 
-  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Self::Error> {
-    let mut statement = self.conn.prepare(
+  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
+    let mut statement = match self.conn.prepare(
       "SELECT
           aggregate_id,
           aggregate_version,
@@ -227,8 +284,11 @@ impl Store for SqliteStore {
         FROM commits
         WHERE commit_id = ?
         ORDER BY commit_number ASC;",
-    )?;
-    let commit: Commit = statement.query_row(&[&commit_id.to_string()], |row| {
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
+    let commit: Commit = match statement.query_row(&[&commit_id.to_string()], |row| {
       let aggregate_id: String = row.get(0).expect("no aggregate_id column in result row");
       let commit_id: String = row.get(2).expect("no commit_id column in result row");
       Ok(Commit {
@@ -251,7 +311,10 @@ impl Store for SqliteStore {
           .expect("no serialized_events column in result row"),
         dispatched: row.get(9).expect("no dispatched column in result row"),
       })
-    })?;
+    }) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
     Ok(commit)
   }
 }
@@ -348,7 +411,7 @@ mod tests {
 
     assert_eq!(
       StoreErrorType::DuplicateWriteError(StorageCommitConflict::CommitSequenceConflict),
-      s.commit(&commit_attempt2).err().unwrap().error_type
+      s.commit(&commit_attempt2).err().unwrap().error_type()
     );
   }
 
@@ -388,7 +451,7 @@ mod tests {
     };
     assert_eq!(
       StoreErrorType::DuplicateWriteError(StorageCommitConflict::AggregateVersionConflict),
-      s.commit(&commit_attempt2).err().unwrap().error_type
+      s.commit(&commit_attempt2).err().unwrap().error_type()
     );
   }
 
@@ -429,7 +492,7 @@ mod tests {
 
     assert_eq!(
       StoreErrorType::DuplicateWriteError(StorageCommitConflict::CommitIdConflict),
-      s.commit(&commit_attempt2).err().unwrap().error_type
+      s.commit(&commit_attempt2).err().unwrap().error_type()
     );
   }
 }

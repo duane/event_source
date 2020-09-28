@@ -1,7 +1,7 @@
 //pub mod dynamodb;
 pub mod sqlite;
 use super::commit::{Commit, CommitAttempt};
-use std::error::Error;
+use std::error;
 use std::fmt;
 use uuid::Uuid;
 
@@ -18,28 +18,24 @@ pub enum StoreErrorType {
   UnknownError,
 }
 
-#[derive(Debug)]
-pub struct StoreError<E: Error> {
-  pub error_type: StoreErrorType,
-  pub cause: E,
+pub trait StoreError: error::Error {
+  fn error_type(&self) -> StoreErrorType;
 }
 
 pub trait Store: Sized {
-  type UnderlyingStoreError: Error;
-  type Error: Error = StoreError<Self::UnderlyingStoreError>;
   type Connection;
 
   fn with_connection(connection: Self::Connection) -> Self;
-  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Self::Error>;
+  fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>>;
   fn get_range(
     &self,
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<Commit>, Self::Error>;
-  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Self::Error>;
-  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Self::Error>;
-  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Self::Error>;
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
+  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>>;
+  fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>>;
+  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<dyn StoreError>>;
 }
 
 impl fmt::Display for StorageCommitConflict {
@@ -60,31 +56,5 @@ impl fmt::Display for StoreErrorType {
       }
       StoreErrorType::UnknownError => write!(f, "UnknownError"),
     }
-  }
-}
-
-impl<E: Error> fmt::Display for StoreError<E> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(
-      f,
-      "StoreError(error_type: {}, cause: {:?})",
-      self.error_type, self.cause
-    )
-  }
-}
-
-impl<E: Error> Error for StoreError<E> {
-  fn description(&self) -> &str {
-    "An error that occurs when interacting with the persistence layer of the event store."
-  }
-
-  fn cause(&self) -> Option<&dyn Error> {
-    Some(&self.cause)
-  }
-}
-
-impl<E: Error> StoreError<E> {
-  pub fn new(error_type: StoreErrorType, cause: E) -> Self {
-    StoreError { error_type, cause }
   }
 }

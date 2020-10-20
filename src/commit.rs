@@ -1,47 +1,106 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+/// A single commit in an event store.
 #[derive(Clone, Debug)]
 pub struct Commit {
+  /// The latest aggregate id. Monotonically increasing.
   pub aggregate_id: Uuid,
+
+  /// The latest aggregate version. Monotonically increasing.
   pub aggregate_version: i64,
+
+  /// The id of the commit. Monotonically increasing.
   pub commit_id: Uuid,
+
+  /// The timestamp of the commit in UTC from the perspective of the store.
   pub commit_timestamp: DateTime<Utc>,
+
+  /// The sequence of the commit. Monotonically increasing.
   pub commit_sequence: i64,
+
+  /// The commit number. TODO: distinguish from sequence.
   pub commit_number: i64,
+
+  /// The events, serialized to json, of the commit.
   pub serialized_events: Vec<u8>,
+
+  /// The metadata, serialized to json, of the commit.
   pub serialized_metadata: Vec<u8>,
+
+  /// The number of events serialized in the commit.
   pub events_count: i64,
+
+  /// Whether or not the commit has been processed by the store's dispatcher.
   pub dispatched: bool,
 }
 
+/// An attempt at a commit. This has not been written yet.
 #[derive(Clone, Debug)]
 pub struct CommitAttempt {
+  /// The new aggregate_id.
   pub aggregate_id: Uuid,
+
+  /// The new aggregate version.
   pub aggregate_version: i64,
+
+  /// The new commit id.
   pub commit_id: Uuid,
+
+  /// The new commit timestamp.
+  ///
+  /// May be overwritten by a more recent timestamp before or at write time.
   pub commit_timestamp: DateTime<Utc>,
+
+  /// The new commit sequence.
   pub commit_sequence: i64,
+
+  /// The metadata of the commit.
   pub serialized_metadata: Vec<u8>,
+
+  /// The events to commit.
   pub serialized_events: Vec<u8>,
+
+  /// The number of events serialized.
   pub events_count: i64,
 }
 
+/// A commit with the events deserialized.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DeserializedCommit {
+  /// Aggregate id.
   pub aggregate_id: Uuid,
+
+  /// Aggregate version.
   pub aggregate_version: i64,
+
+  /// commit id.
   pub commit_id: Uuid,
+
+  /// Commit timestamp
   pub commit_timestamp: DateTime<Utc>,
+
+  /// Commit sequence number.
   pub commit_sequence: i64,
+
+  /// Commit number.
   pub commit_number: i64,
+
+  /// Events, deserialized.
   pub events: serde_json::Value,
+
+  /// Metadata, deserialized.
   pub metadata: serde_json::Value,
+
+  /// Number of deserialized events.
   pub events_count: i64,
+
+  /// Whether or not the commit has been dispatched.
   pub dispatched: bool,
 }
 
 impl Commit {
+  /// Deserialize the events and metadata fields.
   pub fn deserialize(&self) -> DeserializedCommit {
     let events = serde_json::from_slice(self.serialized_events.as_slice()).unwrap();
     let metadata = serde_json::from_slice(self.serialized_metadata.as_slice()).unwrap();

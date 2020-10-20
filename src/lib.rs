@@ -1,4 +1,7 @@
 #![allow(unknown_lints)]
+#![deny(missing_docs)]
+
+//! event_source is a library for working with persistent event streams.
 
 extern crate bytes;
 extern crate chrono;
@@ -31,13 +34,25 @@ extern crate log;
 #[cfg(feature = "sqlite")]
 extern crate rusqlite;
 
+/// Type representing the result of events.
 pub mod aggregate;
+
+/// Type that handles reading of aggregates and execution of commands.
 pub mod client;
+
+/// Type of a mutation that may be applied to an event store.
 pub mod command;
+
+/// Type of a commit in the event store.
 pub mod commit;
+
+/// Type representing notification of events.
 pub mod dispatch;
+
+/// Type representing single events.
 pub mod events;
 
+/// Type representing the service that stores events over time.
 pub mod store;
 
 #[cfg(feature = "httpd")]

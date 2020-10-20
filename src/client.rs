@@ -12,19 +12,26 @@ use serde_json::Serializer as JsonSerializer;
 use store::*;
 use uuid::Uuid;
 
+/// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
   store: Option<S>,
   dispatcher: Option<Dispatcher<D>>,
 }
 
+/// Error that may be returned from client.
 #[derive(Debug)]
 pub enum ClientError {
+  /// An error occured with serialization or deserialization.
   SerializationError(JsonError),
+
+  /// A store error occurred.
   StoreError(Box<dyn StoreError>),
 }
 
 #[derive(Debug)]
+/// A type wrapping an internal JsonError.
 pub struct ClientJsonError {
+  /// The internal error.
   pub cause: JsonError,
 }
 
@@ -40,9 +47,15 @@ impl From<Box<dyn StoreError>> for ClientError {
   }
 }
 
+/// A read/write client for interfacing with a store and event schema.
 pub struct Client<D: DispatchDelegate, S: Store> {
+  /// State for processing events after commit.
   pub dispatcher: Dispatcher<D>,
+
+  /// The store holding events.
   pub store: S,
+
+  /// The latest seen commit id.
   pub commit_sequence: i64,
 }
 
@@ -56,16 +69,19 @@ impl<D: DispatchDelegate, S: Store> Default for ClientBuilder<D, S> {
 }
 
 impl<D: DispatchDelegate, S: Store> ClientBuilder<D, S> {
+  /// Configure the client to talk to a given store.
   pub fn with_store(mut self, s: S) -> ClientBuilder<D, S> {
     self.store = Some(s);
     self
   }
 
+  /// Configure the client to use a delegate to process new commits.
   pub fn with_dispatch_delegate(mut self, delegate: D) -> ClientBuilder<D, S> {
     self.dispatcher = Some(Dispatcher::new(delegate));
     self
   }
 
+  /// Produce a new client with the given store and delegate.
   pub fn finish(self) -> Result<Client<D, S>, &'static str> {
     if self.store.is_none() {
       return Err("Cannot build a client; missing a store.");
@@ -88,6 +104,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     Ok(commit_number)
   }
 
+  /// Replay commits for the given aggregate id into a domain type.
   pub fn fetch_latest<A: Aggregate>(
     &mut self,
     aggregate_id: Uuid,
@@ -110,6 +127,10 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     Ok(aggregate)
   }
 
+  /// Issue a command to the store.
+  ///
+  /// The command may fail for semantic or store reasons.
+  /// You may store the command itself in the metadata.
   pub fn issue_command<C: Command, M: Serialize>(
     &mut self,
     aggregate: &C::Aggregate,

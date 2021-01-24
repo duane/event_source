@@ -6,10 +6,12 @@ use uuid::Uuid;
 use std::error::Error;
 use std::fmt;
 
+/// The store representing a sqlite connection.
 pub struct SqliteStore {
   conn: RusqliteConnection,
 }
 
+/// The errors returned by this store.
 #[derive(Debug)]
 pub struct SqliteStoreError {
   cause: RusqliteError
@@ -40,14 +42,17 @@ impl Into<Box<dyn StoreError>> for SqliteStoreError {
 }
 
 impl SqliteStore {
+  /// Create a new store in-memory.
   pub fn with_new_in_memory_connection() -> Self {
     Self::with_connection(RusqliteConnection::open_in_memory().unwrap())
   }
 
+  /// Create a new store at the given path.
   pub fn with_new_connection_at_path(path: &Path) -> Self {
     Self::with_connection(RusqliteConnection::open(path).unwrap())
   }
 
+  /// Provision a new database.
   pub fn initialize(&self) {
     self.conn.execute_batch(
       "CREATE TABLE IF NOT EXISTS commits (

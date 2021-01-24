@@ -1,15 +1,15 @@
-use aggregate::Aggregate;
+use crate::aggregate::Aggregate;
 use chrono::Utc;
-use command::Command;
-use commit::*;
-use dispatch::*;
+use crate::command::Command;
+use crate::commit::*;
+use crate::dispatch::*;
 use either::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Deserializer as JsonDeserializer;
 use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
-use store::*;
+use crate::store::*;
 use uuid::Uuid;
 
 /// State used in construction of client.
@@ -174,6 +174,52 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
       .and_then(|_| self.store.get_commit(&commit_attempt.commit_id))
       .map_err(ClientError::StoreError)
       .map_err(Either::Left)
+  }
+
+  /// like above but async
+  pub async fn issue_command_async<C: Command, M: Serialize>(
+    &mut self,
+    aggregate: &C::Aggregate,
+    command: &C,
+    metadata: &M,
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
+    let aggregate_update_events: Vec<<<C as Command>::Aggregate as Aggregate>::Event> =
+      command.async_apply(aggregate).await.map_err(Either::Right)?;
+      let mut events_buffer = Vec::<u8>::new();
+      let mut metadata_buffer = Vec::<u8>::new();
+      let events_count = aggregate_update_events.len() as i64;
+  
+      {
+        let mut events_serializer = JsonSerializer::new(&mut events_buffer);
+        aggregate_update_events
+          .serialize(&mut events_serializer)
+          .map_err(ClientError::SerializationError)
+          .map_err(Either::Left)?;
+      }
+  
+      {
+        let mut metadata_serializer = JsonSerializer::new(&mut metadata_buffer);
+        metadata
+          .serialize(&mut metadata_serializer)
+          .map_err(ClientError::SerializationError)
+          .map_err(Either::Left)?;
+      }
+  
+      let commit_attempt = CommitAttempt {
+        aggregate_id: aggregate.id(),
+        aggregate_version: aggregate.version(),
+        commit_id: Uuid::new_v4(),
+        commit_timestamp: Utc::now(),
+        commit_sequence: self.commit_sequence + 1,
+        serialized_metadata: metadata_buffer,
+        serialized_events: events_buffer,
+        events_count,
+      };
+      self
+        .commit(&commit_attempt)
+        .and_then(|_| self.store.get_commit(&commit_attempt.commit_id))
+        .map_err(ClientError::StoreError)
+        .map_err(Either::Left)
   }
 }
 

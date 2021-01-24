@@ -1,6 +1,7 @@
 #[cfg(feature = "dynamo")]
 pub mod dynamodb;
 
+/// The sqlite store
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 

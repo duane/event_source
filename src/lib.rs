@@ -12,6 +12,7 @@ extern crate serde_json;
 extern crate uuid;
 extern crate pretty_env_logger;
 extern crate chashmap;
+extern crate async_trait;
 
 #[macro_use]
 extern crate serde_derive;

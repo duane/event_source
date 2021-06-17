@@ -75,7 +75,7 @@ impl SqliteStore {
   }
 }
 
-impl StoreError for SqliteStoreError { 
+impl StoreError for SqliteStoreError {
   fn error_type(&self) -> StoreErrorType {
     match self.cause {
       RusqliteError::SqliteFailure(_, Some(ref msg))
@@ -227,7 +227,7 @@ impl Store for SqliteStore {
       Err(err) => return Err(SqliteStoreError::from(err).into()),
     };
     let rows = match stmt
-      .query_map(&vec![] as &Vec<&dyn ToSql>, |row| {
+      .query_map([], |row| {
         let aggregate_id_str: String = row.get(0).expect("no aggregate_id column in result");
         let commit_id_str: String = row.get(2).expect("no commit_id column in result");
         Ok(Commit {

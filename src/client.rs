@@ -4,9 +4,7 @@ use crate::command::Command;
 use crate::commit::*;
 use crate::dispatch::*;
 use either::Either;
-use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Deserializer as JsonDeserializer;
 use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
 use crate::store::*;
@@ -112,13 +110,12 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     let commits: Vec<Commit> = {
       self
         .store
-        .get_range(aggregate_id, self.commit_sequence, i64::max_value())
+        .get_range(aggregate_id, 0, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
     let mut aggregate: A = Default::default();
     for commit in commits {
-      let mut deserializer = JsonDeserializer::from_slice(commit.serialized_events.as_slice());
-      let events = Vec::<A::Event>::deserialize(&mut deserializer)?;
+      let events: Vec<<A as Aggregate>::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
       for event in events {
         aggregate = aggregate.apply(&event);
       }
@@ -188,7 +185,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
       let mut events_buffer = Vec::<u8>::new();
       let mut metadata_buffer = Vec::<u8>::new();
       let events_count = aggregate_update_events.len() as i64;
-  
+
       {
         let mut events_serializer = JsonSerializer::new(&mut events_buffer);
         aggregate_update_events
@@ -196,7 +193,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
           .map_err(ClientError::SerializationError)
           .map_err(Either::Left)?;
       }
-  
+
       {
         let mut metadata_serializer = JsonSerializer::new(&mut metadata_buffer);
         metadata
@@ -204,7 +201,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
           .map_err(ClientError::SerializationError)
           .map_err(Either::Left)?;
       }
-  
+
       let commit_attempt = CommitAttempt {
         aggregate_id: aggregate.id(),
         aggregate_version: aggregate.version(),

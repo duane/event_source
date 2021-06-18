@@ -94,7 +94,7 @@ impl StoreError for SqliteStoreError {
         StoreErrorType::DuplicateWriteError(StorageCommitConflict::CommitIdConflict)
       }
       RusqliteError::SqliteFailure(_, Some(ref msg)) => {
-        panic!(msg.clone());
+        panic!("{}", msg.clone());
       }
       _ => StoreErrorType::UnknownError,
     }

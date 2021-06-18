@@ -15,7 +15,6 @@ pub struct Commit {
 
   /// The timestamp of the commit in UTC from the perspective of the store.
   pub commit_timestamp: DateTime<Utc>,
-
   /// The sequence of the commit. Monotonically increasing.
   pub commit_sequence: i64,
 
@@ -35,7 +34,7 @@ pub struct Commit {
   pub dispatched: bool,
 }
 
-/// An attempt at a commit. This has not been written yet.
+/// An attempt at a commit. This potential commit has not been written yet to the store.
 #[derive(Clone, Debug)]
 pub struct CommitAttempt {
   /// The new aggregate_id.

@@ -57,4 +57,5 @@ pub mod events;
 pub mod store;
 
 #[cfg(feature = "httpd")]
+/// The HTTP server.
 pub mod server;

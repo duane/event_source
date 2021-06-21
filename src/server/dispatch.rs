@@ -1,8 +1,8 @@
 use warp::{self, Filter, Future};
 
 use chashmap::CHashMap;
-use commit::Commit;
-use dispatch::DispatchDelegate;
+use crate::commit::Commit;
+use crate::dispatch::DispatchDelegate;
 use serde::Serialize;
 use serde_json::Serializer as JsonSerializer;
 use std::str::from_utf8;
@@ -14,6 +14,8 @@ use std::sync::{
 use uuid::Uuid;
 use warp::filters::ws::{Message, WebSocket};
 use warp::Stream;
+use log::{error, info};
+use futures::StreamExt;
 
 static SUBSCRIBER_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -47,7 +49,7 @@ impl WebSocketSubscriptions {
     warp::path("commits")
       .and(warp::path::param())
       .and(warp::ws())
-      .map(move |aggregate_id: Uuid, ws: warp::ws::Ws2| {
+      .map(move |aggregate_id: Uuid, ws: warp::ws::Ws| {
         let state_handle = Arc::clone(&state_handle);
         ws.on_upgrade(move |websocket| subscribe(aggregate_id, state_handle, websocket))
       })
@@ -93,7 +95,7 @@ fn subscribe(
   aggregate_id: Uuid,
   aggregate_map: AggregateMap,
   websocket: WebSocket,
-) -> impl Future<Item = (), Error = ()> {
+) -> impl Future<Output = ()> {
   let subscriber_id = SUBSCRIBER_ID.fetch_add(1, Ordering::Relaxed);
   let (subscriber_ws_tx, subscriber_ws_rx) = websocket.split();
   let (tx, rx) = mpsc::channel();

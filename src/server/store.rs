@@ -1,9 +1,10 @@
 use warp::{path, Filter};
 
-use commit::*;
-use store::*;
+use crate::commit::*;
+use crate::store::*;
 use uuid::Uuid;
 
+/// Return a list of commits for the given aggregate id.
 pub fn commit_list<S: Store, Fs: Fn() -> S>(
   store_factory: &Fs,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone

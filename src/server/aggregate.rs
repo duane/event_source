@@ -1,14 +1,15 @@
 use warp::{path, Filter};
 
-use aggregate::Aggregate;
-use client::ClientBuilder;
-use command::Command;
-use dispatch::{DispatchDelegate, NullDispatcher};
+use crate::aggregate::Aggregate;
+use crate::client::ClientBuilder;
+use crate::command::Command;
+use crate::dispatch::{DispatchDelegate, NullDispatcher};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use store::Store;
+use crate::store::Store;
 use uuid::Uuid;
 
+/// Fetch the latest aggregate for a uuid.
 pub fn get_latest<S: Store, A: Aggregate + Serialize, Fs: Fn() -> S>(
   store_factory: &Fs,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
@@ -29,6 +30,7 @@ where
   })
 }
 
+/// Issue a command to the aggregate.
 pub fn commit<
   S: Store,
   D: DispatchDelegate,

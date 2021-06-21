@@ -14,6 +14,12 @@ use crate::client::applicable::EventApplicable;
 /// The applicable data type.
 pub mod applicable;
 
+/// unsafe write client
+pub mod write_client;
+
+/// safe write client
+pub mod aggregate_stream;
+
 /// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
   store: Option<S>,

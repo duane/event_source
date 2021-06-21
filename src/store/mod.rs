@@ -5,10 +5,7 @@ pub mod dynamodb;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 
-/// The HTTP-backed store
-pub mod http;
-
-use super::commit::{Commit, CommitAttempt};
+use super::commit::{DeserializedCommit, CommitAttempt};
 use std::error;
 use std::fmt;
 use uuid::Uuid;
@@ -60,20 +57,20 @@ pub trait ClientStore: Sized {
   /// Because the minimum and maximum bounds are passed, you may get zero commits.
   /// Getting all commits between 0 and the latest commit id should retrieve all events associated with the aggregate.
   fn get_range(
-    &self,
+    &mut self,
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
+  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>>;
 
   /// Get a single commit.
-  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<dyn StoreError>>;
+  fn get_commit(&mut self, commit_it: &Uuid) -> Result<DeserializedCommit, Box<dyn StoreError>>;
 }
 
 /// A store for reading and writing events.
 pub trait Store: ClientStore {
   /// Get all commits which have not been marked as dispatched by some dispatcher.
-  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>>;
+  fn get_undispatched_commits(&mut self) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>>;
 
   /// Mark a single commit as having been dispatched.
   fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>>;

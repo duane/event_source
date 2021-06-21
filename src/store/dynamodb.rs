@@ -206,7 +206,7 @@ impl DynamoDbStore {
   }
 
   pub fn get_range(
-    &self,
+    &mut self,
     aggregate_id: Uuid,
     min_commit_sequence: i64,
     max_commit_sequence: i64,

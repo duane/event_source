@@ -1,4 +1,4 @@
-use super::super::commit::{Commit, CommitAttempt};
+use super::super::commit::{DeserializedCommit, Commit, CommitAttempt};
 use super::{StorageCommitConflict, ClientStore, Store, StoreError, StoreErrorType};
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::path::Path;
@@ -150,11 +150,11 @@ impl ClientStore for SqliteStore {
   }
 
   fn get_range(
-    &self,
+    &mut self,
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
     let mut stmt = match self.conn.prepare(
       "SELECT
           aggregate_id,
@@ -196,7 +196,7 @@ impl ClientStore for SqliteStore {
             serialized_metadata: row.get(7).expect("no serialized_metadat result column"),
             serialized_events: row.get(8).expect("no serialized_events result column"),
             dispatched: row.get(9).expect("no dispatched result column"),
-          })
+          }.deserialize())
         },
       ) {
         Ok(result) => result,
@@ -206,7 +206,7 @@ impl ClientStore for SqliteStore {
     Ok(rows)
   }
 
-  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
+  fn get_commit(&mut self, commit_id: &Uuid) -> Result<DeserializedCommit, Box<dyn StoreError>> {
     let mut statement = match self.conn.prepare(
       "SELECT
           aggregate_id,
@@ -226,7 +226,7 @@ impl ClientStore for SqliteStore {
       Ok(result) => result,
       Err(err) => return Err(SqliteStoreError::from(err).into()),
     };
-    let commit: Commit = match statement.query_row(&[&commit_id.to_string()], |row| {
+    let commit: DeserializedCommit = match statement.query_row(&[&commit_id.to_string()], |row| {
       let aggregate_id: String = row.get(0).expect("no aggregate_id column in result row");
       let commit_id: String = row.get(2).expect("no commit_id column in result row");
       Ok(Commit {
@@ -248,7 +248,7 @@ impl ClientStore for SqliteStore {
           .get(8)
           .expect("no serialized_events column in result row"),
         dispatched: row.get(9).expect("no dispatched column in result row"),
-      })
+      }.deserialize())
     }) {
       Ok(result) => result,
       Err(err) => return Err(SqliteStoreError::from(err).into()),
@@ -258,7 +258,7 @@ impl ClientStore for SqliteStore {
 }
 
 impl Store for SqliteStore {
-  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+  fn get_undispatched_commits(&mut self) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
     let mut stmt = match self.conn.prepare(
       "SELECT
           aggregate_id,
@@ -295,7 +295,7 @@ impl Store for SqliteStore {
           serialized_metadata: row.get(7).expect("no serialized_metadata column in result"),
           serialized_events: row.get(8).expect("no serialized_events column in result"),
           dispatched: row.get(9).expect("no dispatched column in result"),
-        })
+        }.deserialize())
       }) {
         Ok(result) => result,
         Err(err) => return Err(SqliteStoreError::from(err).into()),

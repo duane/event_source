@@ -1,10 +1,10 @@
 use crate::client::applicable::MutEventApplicable;
-use crate::store::Store;
+use crate::client::event_source::EventSource;
 use uuid::Uuid;
-use crate::commit::Commit;
+use crate::commit::DeserializedCommit;
 
 /// A datatype that may be mutated with an event.
-pub trait SyncStreamable<S: Store>: MutEventApplicable {
+pub trait SyncStreamable<S: EventSource>: MutEventApplicable {
   /// Return the current position in the stream.
   fn pos(&self) -> i64;
 
@@ -21,7 +21,7 @@ pub trait SyncStreamable<S: Store>: MutEventApplicable {
   fn sync(&mut self) {
     let aggregate_id = self.aggregate_id().to_owned();
     let pos = self.pos();
-    let commits: Vec<Commit> = {
+    let commits: Vec<DeserializedCommit> = {
       self
         .store()
         .get_range(aggregate_id, pos, i64::max_value())
@@ -29,7 +29,7 @@ pub trait SyncStreamable<S: Store>: MutEventApplicable {
     };
 
     for commit in commits {
-      let events: Vec<Self::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
+      let events: Vec<Self::Event> = serde_json::from_value(commit.events).unwrap();
       for ref event in events {
         self.apply(event);
       }

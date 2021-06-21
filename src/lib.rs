@@ -16,8 +16,10 @@ extern crate async_trait;
 
 #[macro_use]
 extern crate serde_derive;
-#[cfg(feature = "httpd")]
+#[cfg(any(feature = "httpd", feature="httpc"))]
 extern crate hyper;
+#[cfg(any(feature = "httpd", feature="httpc"))]
+extern crate http;
 #[cfg(feature = "dynamo")]
 extern crate rusoto_core;
 #[cfg(feature = "dynamo")]

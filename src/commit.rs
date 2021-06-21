@@ -35,7 +35,7 @@ pub struct Commit {
 }
 
 /// An attempt at a commit. This potential commit has not been written yet to the store.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitAttempt {
   /// The new aggregate_id.
   pub aggregate_id: Uuid,

@@ -20,6 +20,16 @@ pub mod aggregate_stream;
 /// generic sync projection
 pub mod sync_streamable;
 
+/// event source
+pub mod event_source;
+
+/// command processor
+pub mod command_processor;
+
+/// The HTTP-backed store
+#[cfg(feature = "httpc")]
+pub mod http;
+
 /// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
   store: Option<S>,
@@ -117,7 +127,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     &mut self,
     aggregate_id: Uuid,
   ) -> Result<A, ClientError> {
-    let commits: Vec<Commit> = {
+    let commits: Vec<DeserializedCommit> = {
       self
         .store
         .get_range(aggregate_id, 0, i64::max_value())
@@ -125,7 +135,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     };
     let mut aggregate: A = Default::default();
     for commit in commits {
-      let events: Vec<<A as EventApplicable>::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
+      let events: Vec<<A as EventApplicable>::Event> = serde_json::from_value(commit.events).unwrap();
       for event in events {
         aggregate = aggregate.apply(&event);
       }
@@ -143,7 +153,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
-  ) -> Result<Commit, Either<ClientError, C::Error>> {
+  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.apply(aggregate).map_err(Either::Right)?;
     let mut events_buffer = Vec::<u8>::new();
@@ -189,7 +199,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
-  ) -> Result<Commit, Either<ClientError, C::Error>> {
+  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.async_apply(aggregate).await.map_err(Either::Right)?;
       let mut events_buffer = Vec::<u8>::new();

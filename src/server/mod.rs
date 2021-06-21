@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::server::aggregate::commit;
 use crate::server::aggregate::get_latest;
 // use crate::server::dispatch::WebSocketSubscriptions;
-use crate::server::store::commit_list;
+use crate::server::store::{commit_get, commit_list};
 use crate::store::Store;
 use warp::Filter;
 use log::info;
@@ -53,10 +53,11 @@ impl Server {
   {
     let get_latest_route = get_latest::<S, C::Aggregate, Fs>(&store_factory);
     let commit_list_route = commit_list(&store_factory);
+    let commit_get_route = commit_get(&store_factory);
     // let commit_subscription_route = self.subscriptions_state.commit_subscription();
     // let f = move || self.subscriptions_state.clone();
     let commit_route = commit::<_, _, C, _, _>(&store_factory, &|| NullDispatcher {});
-    let get_routes = warp::get().and(commit_list_route.or(get_latest_route));
+    let get_routes = warp::get().and(commit_list_route.or(get_latest_route).or(commit_get_route));
     let post_routes = warp::post().and(commit_route);
     // let routes = commit_subscription_route.or(get_routes).or(post_routes);
     let routes = get_routes.or(post_routes);

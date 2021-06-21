@@ -6,5 +6,14 @@ pub trait EventApplicable {
   type Event: Event;
 
   /// The function to produce a new version of this data type with the event applied.
-  fn apply(self: &Self, event: &Self::Event) -> Self;
+  fn apply(&self, event: &Self::Event) -> Self;
+}
+
+/// A datatype that may be mutated with an event.
+pub trait MutEventApplicable {
+  /// The event type used to mutate this data.
+  type Event: Event;
+
+  /// The function to produce a new version of this data type with the event applied.
+  fn apply(&mut self, event: &Self::Event);
 }

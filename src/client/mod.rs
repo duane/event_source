@@ -20,6 +20,9 @@ pub mod write_client;
 /// safe write client
 pub mod aggregate_stream;
 
+/// generic sync projection
+pub mod sync_streamable;
+
 /// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
   store: Option<S>,

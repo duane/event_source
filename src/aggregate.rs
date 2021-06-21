@@ -4,7 +4,7 @@ use crate::client::applicable::EventApplicable;
 /// A data type for working with the result of events over time.
 ///
 /// This is generally used for working with the internal logic of Commands.
-pub trait Aggregate: EventApplicable + Default + Clone + Sized {
+pub trait Aggregate: EventApplicable + Default + Clone + Sized + core::fmt::Debug {
   /// Initialize the aggregate with a unique identifier.
   fn with_id(id: Uuid) -> Self;
 

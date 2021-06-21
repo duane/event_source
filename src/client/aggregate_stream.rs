@@ -43,11 +43,10 @@ impl<C: Command, S: Store, D: DispatchDelegate> AggregateStream<C, S, D> {
         .get_range(self.aggregate_id, self.commit_sequence, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
-    let mut aggregate: C::Aggregate = Default::default();
     for commit in commits {
       let events: Vec<<C::Aggregate as EventApplicable>::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
       for event in events {
-        aggregate = aggregate.apply(&event);
+        self.aggregate = self.aggregate.apply(&event);
       }
       self.commit_sequence = commit.commit_sequence;
     }
@@ -65,11 +64,12 @@ impl<C: Command, S: Store, D: DispatchDelegate> AggregateStream<C, S, D> {
   ///
   /// The command may fail for semantic or store reasons.
   /// You may store the command itself in the metadata.
-  pub fn issue_command<M: Serialize>(
+  pub fn issue_command<M: Serialize + core::fmt::Debug>(
     &mut self,
     command: &C,
     metadata: &M,
   ) -> Result<Commit, Either<ClientError, C::Error>> {
+    // println!("issuing command: {:#?}\nwith metadata: {:#?}\non aggregate: {:#?}", command, metadata, self.aggregate);
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.apply(&self.aggregate).map_err(Either::Right)?;
     let mut events_buffer = Vec::<u8>::new();

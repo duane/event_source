@@ -9,6 +9,10 @@ use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
 use crate::store::*;
 use uuid::Uuid;
+use crate::client::applicable::EventApplicable;
+
+/// The applicable data type.
+pub mod applicable;
 
 /// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
@@ -115,7 +119,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     };
     let mut aggregate: A = Default::default();
     for commit in commits {
-      let events: Vec<<A as Aggregate>::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
+      let events: Vec<<A as EventApplicable>::Event> = serde_json::from_value(commit.deserialize().events).unwrap();
       for event in events {
         aggregate = aggregate.apply(&event);
       }
@@ -134,7 +138,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     command: &C,
     metadata: &M,
   ) -> Result<Commit, Either<ClientError, C::Error>> {
-    let aggregate_update_events: Vec<<<C as Command>::Aggregate as Aggregate>::Event> =
+    let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.apply(aggregate).map_err(Either::Right)?;
     let mut events_buffer = Vec::<u8>::new();
     let mut metadata_buffer = Vec::<u8>::new();
@@ -180,7 +184,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     command: &C,
     metadata: &M,
   ) -> Result<Commit, Either<ClientError, C::Error>> {
-    let aggregate_update_events: Vec<<<C as Command>::Aggregate as Aggregate>::Event> =
+    let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.async_apply(aggregate).await.map_err(Either::Right)?;
       let mut events_buffer = Vec::<u8>::new();
       let mut metadata_buffer = Vec::<u8>::new();
@@ -225,6 +229,7 @@ mod tests {
   use super::super::events::Event;
   use super::super::store::sqlite::SqliteStore;
   use super::*;
+  use crate::client::applicable::EventApplicable;
   use chrono::Utc;
   use std::default::Default;
   use uuid::Uuid;
@@ -253,18 +258,20 @@ mod tests {
     version: i64,
   }
 
-  impl Aggregate for MockAggregate {
+  impl EventApplicable for MockAggregate {
     type Event = MockEvent;
-
-    fn with_id(id: Uuid) -> Self {
-      MockAggregate { id, version: 0 }
-    }
 
     fn apply(&self, _event: &Self::Event) -> MockAggregate {
       MockAggregate {
         id: self.id,
         version: self.version + 1,
       }
+    }
+  }
+
+  impl Aggregate for MockAggregate {
+    fn with_id(id: Uuid) -> Self {
+      MockAggregate { id, version: 0 }
     }
 
     fn version(&self) -> i64 {

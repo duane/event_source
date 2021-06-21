@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use async_trait::async_trait;
 use uuid::Uuid;
+use crate::client::applicable::EventApplicable;
 
 #[async_trait]
 /// A single mutation to the event store.
@@ -20,11 +21,11 @@ pub trait Command: Send + Sync + Clone + Debug {
   fn apply(
     &self,
     aggregate: &Self::Aggregate,
-  ) -> Result<Vec<<<Self as Command>::Aggregate as Aggregate>::Event>, Self::Error>;
+  ) -> Result<Vec<<<Self as Command>::Aggregate as EventApplicable>::Event>, Self::Error>;
 
   /// Produce a new aggregate with the command applied.
   async fn async_apply(
     &self,
     aggregate: &Self::Aggregate,
-  ) -> Result<Vec<<<Self as Command>::Aggregate as Aggregate>::Event>, Self::Error>;
+  ) -> Result<Vec<<<Self as Command>::Aggregate as EventApplicable>::Event>, Self::Error>;
 }

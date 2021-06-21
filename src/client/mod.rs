@@ -14,9 +14,6 @@ use crate::client::applicable::EventApplicable;
 /// The applicable data type.
 pub mod applicable;
 
-/// unsafe write client
-pub mod write_client;
-
 /// safe write client
 pub mod aggregate_stream;
 
@@ -261,7 +258,7 @@ mod tests {
 
   impl Event for MockEvent {}
 
-  #[derive(Default, Clone)]
+  #[derive(Default, Clone, Debug)]
   struct MockAggregate {
     id: Uuid,
     version: i64,

@@ -3,13 +3,11 @@ use crate::command::Command;
 use crate::store::{Store, StoreError};
 use crate::client::applicable::EventApplicable;
 use crate::client::ClientError;
-use crate::client::write_client::WriteClient;
 use crate::commit::{CommitAttempt, Commit};
 use crate::dispatch::{Dispatcher, DispatchDelegate};
 
 use either::Either;
 use serde::Serialize;
-use serde_json::Error as JsonError;
 use serde_json::Serializer as JsonSerializer;
 use uuid::Uuid;
 use chrono::Utc;

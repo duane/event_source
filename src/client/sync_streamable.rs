@@ -1,4 +1,3 @@
-use crate::events::Event;
 use crate::client::applicable::MutEventApplicable;
 use crate::store::Store;
 use uuid::Uuid;

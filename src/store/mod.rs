@@ -5,6 +5,9 @@ pub mod dynamodb;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 
+/// The HTTP-backed store
+pub mod http;
+
 use super::commit::{Commit, CommitAttempt};
 use std::error;
 use std::fmt;
@@ -39,8 +42,8 @@ pub trait StoreError: error::Error {
   fn error_type(&self) -> StoreErrorType;
 }
 
-/// A store for reading and writing events.
-pub trait Store: Sized {
+/// A trait allowing committing and retrieving, but not dispatching.
+pub trait ClientStore: Sized {
   /// The backing database state.
   type Connection;
 
@@ -63,14 +66,17 @@ pub trait Store: Sized {
     max_version: i64,
   ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 
+  /// Get a single commit.
+  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<dyn StoreError>>;
+}
+
+/// A store for reading and writing events.
+pub trait Store: ClientStore {
   /// Get all commits which have not been marked as dispatched by some dispatcher.
   fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 
   /// Mark a single commit as having been dispatched.
   fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>>;
-
-  /// Get a single commit.
-  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<dyn StoreError>>;
 }
 
 impl fmt::Display for StorageCommitConflict {

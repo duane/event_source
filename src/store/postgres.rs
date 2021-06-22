@@ -162,7 +162,7 @@ impl ClientStore for PostgresStore {
         AND aggregate_id = $3;",
         &[
           &(min_version as i32),
-          &(max_version as i32),
+          &(std::cmp::min(max_version, i32::max_value() as i64) as i32),
           &aggregate_id
         ]
     ) {
@@ -173,12 +173,12 @@ impl ClientStore for PostgresStore {
       rows.into_iter().map(|row| {
         DeserializedCommit {
           aggregate_id: row.get(0),
-          aggregate_version: row.get(1),
+          aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),
           commit_timestamp: row.get(3),
-          commit_sequence: row.get(4),
-          commit_number: row.get(5),
-          events_count: row.get(6),
+          commit_sequence: row.get::<usize, i32>(4) as i64,
+          commit_number: row.get::<usize, i32>(5) as i64,
+          events_count: row.get::<usize, i32>(6) as i64,
           metadata: row.get(7),
           events: row.get(8),
           dispatched: row.get(9),

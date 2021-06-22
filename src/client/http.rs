@@ -134,23 +134,4 @@ impl<C: Command> CommandProcessor<C> for HttpStore {
   }
 }
 
-// fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
-//   let rt = tokio::runtime::Runtime::new().unwrap();
-
-//   let response_body = rt.block_on(
-//     issue_post(
-//       &mut self.client,
-//       Uri::try_from(
-//         format!(
-//           "http://localhost:4321/commit/{}",
-//           commit_attempt.commit_id
-//         )
-//       ).unwrap(),
-//       serde_json::to_value(commit_attempt).unwrap()
-//     )
-//   ).unwrap();
-//   println!("body: {}", response_body);
-//   let commit: DeserializedCommit = serde_json::from_str(response_body.as_ref()).unwrap();
-//   Ok(commit.commit_number)
-// }
 

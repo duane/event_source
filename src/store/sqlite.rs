@@ -12,7 +12,8 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
-  fn with_connection(connection: RusqliteConnection) -> Self {
+  /// create the store around the given connection
+  pub fn with_connection(connection: RusqliteConnection) -> Self {
     SqliteStore { conn: connection }
   }
 }
@@ -61,28 +62,6 @@ impl SqliteStore {
   /// Create a new store at the given path.
   pub fn with_new_connection_at_path(path: &Path) -> Self {
     Self::with_connection(RusqliteConnection::open(path).unwrap())
-  }
-
-  /// Provision a new database.
-  pub fn initialize(&self) {
-    self.conn.execute_batch(
-      "CREATE TABLE IF NOT EXISTS commits (
-        aggregate_id      VARCHAR(36) NOT NULL,
-        aggregate_version INTEGER NOT NULL,
-        commit_id         VARCHAR(36) NOT NULL,
-        commit_sequence   INTEGER NOT NULL,
-        commit_number     INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-        commit_timestamp  DATETIME NOT NULL,
-        events_count      INTEGER NOT NULL,
-        metadata          BLOB NOT NULL,
-        events            BLOB NOT NULL,
-        dispatched        INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sequence_idx ON commits (aggregate_id, commit_sequence);
-      CREATE INDEX IF NOT EXISTS commits_dispatched_idx ON commits (dispatched);"
-    ).expect("could not intiailize sqlite commits table");
   }
 }
 
@@ -273,6 +252,31 @@ impl ClientStore for SqliteStore {
 }
 
 impl Store for SqliteStore {
+  /// Provision a new database.
+  fn initialize(&mut self) -> Result<(), Box<dyn StoreError>> {
+    match self.conn.execute_batch(
+      "CREATE TABLE IF NOT EXISTS commits (
+        aggregate_id      VARCHAR(36) NOT NULL,
+        aggregate_version INTEGER NOT NULL,
+        commit_id         VARCHAR(36) NOT NULL,
+        commit_sequence   INTEGER NOT NULL,
+        commit_number     INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+        commit_timestamp  DATETIME NOT NULL,
+        events_count      INTEGER NOT NULL,
+        metadata          BLOB NOT NULL,
+        events            BLOB NOT NULL,
+        dispatched        INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sequence_idx ON commits (aggregate_id, commit_sequence);
+      CREATE INDEX IF NOT EXISTS commits_dispatched_idx ON commits (dispatched);"
+    ) {
+      Ok(_) => Ok(()),
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    }
+  }
+
   fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let mut stmt = match self.conn.prepare(
       "SELECT

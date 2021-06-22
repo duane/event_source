@@ -18,7 +18,8 @@ pub struct HttpStore {
 }
 
 impl HttpStore {
-  fn with_connection(connection: Client<HttpConnector, hyper::body::Body>) -> Self {
+  /// create the http store with the connection
+  pub fn with_connection(connection: Client<HttpConnector, hyper::body::Body>) -> HttpStore {
     HttpStore { client: connection }
   }
 }

@@ -12,7 +12,7 @@ struct StoreQueryParams {
 }
 
 /// Return a list of commits for the given aggregate id.
-pub fn commit_list<S: Store, Fs: Fn() -> S>(
+pub fn commit_list<Fs: Fn() -> Box<dyn Store>>(
   store_factory: &Fs,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
 where
@@ -36,7 +36,7 @@ where
 }
 
 /// Return a list of commits for the given aggregate id.
-pub fn commit_get<S: Store, Fs: Fn() -> S>(
+pub fn commit_get<Fs: Fn() -> Box<dyn Store>>(
   store_factory: &Fs,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
 where

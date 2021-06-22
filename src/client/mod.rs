@@ -30,8 +30,8 @@ pub mod command_processor;
 pub mod http;
 
 /// State used in construction of client.
-pub struct ClientBuilder<D: DispatchDelegate, S: Store> {
-  store: Option<S>,
+pub struct ClientBuilder<D: DispatchDelegate> {
+  store: Option<Box<dyn Store>>,
   dispatcher: Option<Dispatcher<D>>,
 }
 
@@ -65,19 +65,19 @@ impl From<Box<dyn StoreError>> for ClientError {
 }
 
 /// A read/write client for interfacing with a store and event schema.
-pub struct Client<D: DispatchDelegate, S: Store> {
+pub struct Client<D: DispatchDelegate> {
   /// State for processing events after commit.
   pub dispatcher: Dispatcher<D>,
 
   /// The store holding events.
-  pub store: S,
+  pub store: Box<dyn Store>,
 
   /// The latest seen commit id.
   pub commit_sequence: i64,
 }
 
-impl<D: DispatchDelegate, S: Store> Default for ClientBuilder<D, S> {
-  fn default() -> ClientBuilder<D, S> {
+impl<D: DispatchDelegate> Default for ClientBuilder<D> {
+  fn default() -> ClientBuilder<D> {
     ClientBuilder {
       dispatcher: None,
       store: None,
@@ -85,21 +85,21 @@ impl<D: DispatchDelegate, S: Store> Default for ClientBuilder<D, S> {
   }
 }
 
-impl<D: DispatchDelegate, S: Store> ClientBuilder<D, S> {
+impl<D: DispatchDelegate> ClientBuilder<D> {
   /// Configure the client to talk to a given store.
-  pub fn with_store(mut self, s: S) -> ClientBuilder<D, S> {
+  pub fn with_store(mut self, s: Box<dyn Store>) -> ClientBuilder<D> {
     self.store = Some(s);
     self
   }
 
   /// Configure the client to use a delegate to process new commits.
-  pub fn with_dispatch_delegate(mut self, delegate: D) -> ClientBuilder<D, S> {
+  pub fn with_dispatch_delegate(mut self, delegate: D) -> ClientBuilder<D> {
     self.dispatcher = Some(Dispatcher::new(delegate));
     self
   }
 
   /// Produce a new client with the given store and delegate.
-  pub fn finish(self) -> Result<Client<D, S>, &'static str> {
+  pub fn finish(self) -> Result<Client<D>, &'static str> {
     if self.store.is_none() {
       return Err("Cannot build a client; missing a store.");
     }
@@ -114,18 +114,17 @@ impl<D: DispatchDelegate, S: Store> ClientBuilder<D, S> {
   }
 }
 
-impl<D: DispatchDelegate, S: Store> Client<D, S> {
+impl<D: DispatchDelegate> Client<D> {
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
-    let commit_number = self.store.commit(commit_attempt)?;
-    let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
+    let commit_number = self.store.as_mut().commit(commit_attempt)?;
+    // let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
     Ok(commit_number)
   }
 
   /// Replay commits for the given aggregate id into a domain type.
   pub fn fetch_latest<A: Aggregate>(&mut self, aggregate_id: Uuid) -> Result<A, ClientError> {
     let commits: Vec<Commit> = {
-      self
-        .store
+      self.store.as_mut()
         .get_range(aggregate_id, 0, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
@@ -167,7 +166,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     };
     self
       .commit(&commit_attempt)
-      .and_then(|_| self.store.get_commit(&commit_attempt.commit_id))
+      .and_then(|_| self.store.as_mut().get_commit(&commit_attempt.commit_id))
       .map_err(ClientError::StoreError)
       .map_err(Either::Left)
   }
@@ -198,7 +197,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     };
     self
       .commit(&commit_attempt)
-      .and_then(|_| self.store.get_commit(&commit_attempt.commit_id))
+      .and_then(|_| self.store.as_mut().get_commit(&commit_attempt.commit_id))
       .map_err(ClientError::StoreError)
       .map_err(Either::Left)
   }

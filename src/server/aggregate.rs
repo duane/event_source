@@ -18,7 +18,7 @@ pub struct HttpErrorResponse {
 }
 
 /// Fetch the latest aggregate for a uuid.
-pub fn get_latest<S: Store, A: Aggregate + Serialize, Fs: Fn() -> S>(
+pub fn get_latest<A: Aggregate + Serialize, Fs: Fn() -> Box<dyn Store>>(
   store_factory: &Fs,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
 where
@@ -40,10 +40,9 @@ where
 
 /// Issue a command to the aggregate.
 pub fn commit<
-  S: Store,
   D: DispatchDelegate,
   C: Command + Serialize + DeserializeOwned,
-  Fs: Fn() -> S,
+  Fs: Fn() -> Box<dyn Store>,
   Fd: Fn() -> D,
 >(
   store_factory: &Fs,

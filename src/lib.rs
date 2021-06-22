@@ -39,6 +39,12 @@ extern crate rusqlite;
 
 #[cfg(feature = "psql")]
 extern crate postgres;
+#[cfg(feature = "psql")]
+extern crate native_tls;
+#[cfg(feature = "psql")]
+extern crate postgres_native_tls;
+
+extern crate toml;
 
 /// Type representing the result of events.
 pub mod aggregate;

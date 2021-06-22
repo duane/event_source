@@ -11,7 +11,8 @@ pub struct PostgresStore {
 }
 
 impl PostgresStore {
-  fn with_connection(connection: Client) -> Self {
+  /// create the store around the given client
+  pub fn with_connection(connection: Client) -> Self {
     PostgresStore { client: connection }
   }
 }
@@ -48,30 +49,6 @@ impl From<postgres::Error> for PostgresStoreError {
 impl Into<Box<dyn StoreError>> for PostgresStoreError {
   fn into(self) -> Box<dyn StoreError> {
     Box::new(self)
-  }
-}
-
-impl PostgresStore {
-  /// Provision a new database.
-  pub fn initialize(&mut self) {
-    self.client.batch_execute(
-      "CREATE TABLE IF NOT EXISTS commits (
-        aggregate_id      UUID NOT NULL,
-        aggregate_version INTEGER NOT NULL,
-        commit_id         UUID NOT NULL,
-        commit_sequence   INTEGER NOT NULL,
-        commit_number     SERIAL PRIMARY KEY,
-        commit_timestamp  TIMESTAMP WITH TIME ZONE NOT NULL,
-        events_count      INTEGER NOT NULL,
-        metadata          JSON NOT NULL,
-        events            JSON NOT NULL,
-        dispatched        BOOLEAN NOT NULL DEFAULT FALSE
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
-      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sequence_idx ON commits (aggregate_id, commit_sequence);
-      CREATE INDEX IF NOT EXISTS commits_dispatched_idx ON commits (dispatched);"
-    ).expect("could not intialize postgres commits table");
   }
 }
 
@@ -236,6 +213,31 @@ impl ClientStore for PostgresStore {
 }
 
 impl Store for PostgresStore {
+  /// Provision a new database.
+  fn initialize(&mut self) -> Result<(), Box<dyn StoreError>> {
+    match self.client.batch_execute(
+      "CREATE TABLE IF NOT EXISTS commits (
+        aggregate_id      UUID NOT NULL,
+        aggregate_version INTEGER NOT NULL,
+        commit_id         UUID NOT NULL,
+        commit_sequence   INTEGER NOT NULL,
+        commit_number     SERIAL PRIMARY KEY,
+        commit_timestamp  TIMESTAMP WITH TIME ZONE NOT NULL,
+        events_count      INTEGER NOT NULL,
+        metadata          JSON NOT NULL,
+        events            JSON NOT NULL,
+        dispatched        BOOLEAN NOT NULL DEFAULT FALSE
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
+      CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_sequence_idx ON commits (aggregate_id, commit_sequence);
+      CREATE INDEX IF NOT EXISTS commits_dispatched_idx ON commits (dispatched);"
+    ) {
+      Ok(_) => Ok(()),
+      Err(err) => Err(PostgresStoreError::from(err).into()),
+    }
+  }
+
   fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,

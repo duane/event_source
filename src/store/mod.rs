@@ -9,6 +9,9 @@ pub mod sqlite;
 #[cfg(feature = "psql")]
 pub mod postgres;
 
+/// load store config from file or whatever
+pub mod config;
+
 use super::commit::{Commit, CommitAttempt};
 use std::error;
 use std::fmt;
@@ -44,7 +47,7 @@ pub trait StoreError: error::Error {
 }
 
 /// A trait allowing committing and retrieving, but not dispatching.
-pub trait ClientStore: Sized {
+pub trait ClientStore {
   /// Write a commit to a store.
   ///
   /// If the commit succeeds, this will return an immutable commit representing a set of events that have occurred.
@@ -67,6 +70,9 @@ pub trait ClientStore: Sized {
 
 /// A store for reading and writing events.
 pub trait Store: ClientStore {
+  /// Initialize the database to a usable state.
+  fn initialize(&mut self) -> Result<(), Box<dyn StoreError>>;
+
   /// Get all commits which have not been marked as dispatched by some dispatcher.
   fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 

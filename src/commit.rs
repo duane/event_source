@@ -55,10 +55,10 @@ pub struct CommitAttempt {
   pub commit_sequence: i64,
 
   /// The metadata of the commit.
-  pub serialized_metadata: Vec<u8>,
+  pub metadata: serde_json::Value,
 
   /// The events to commit.
-  pub serialized_events: Vec<u8>,
+  pub events: serde_json::Value,
 
   /// The number of events serialized.
   pub events_count: i64,

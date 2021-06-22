@@ -50,11 +50,11 @@ impl PostgresStore {
         commit_id         UUID NOT NULL,
         commit_sequence   INTEGER NOT NULL,
         commit_number     SERIAL PRIMARY KEY,
-        commit_timestamp  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+        commit_timestamp  TIMESTAMP WITH TIME ZONE NOT NULL,
         events_count      INTEGER NOT NULL,
         metadata          JSON NOT NULL,
         events            JSON NOT NULL,
-        dispatched        INTEGER NOT NULL DEFAULT 0
+        dispatched        BOOLEAN NOT NULL DEFAULT FALSE
       );
       CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_id_unique_idx ON commits (commit_id);
       CREATE UNIQUE INDEX IF NOT EXISTS commits_commit_aggregate_idx ON commits (aggregate_id, aggregate_version);
@@ -102,7 +102,7 @@ impl ClientStore for PostgresStore {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
-    match transaction.query(
+    let commit_number = match transaction.query(
       "INSERT INTO commits (
         aggregate_id,
         aggregate_version,
@@ -115,17 +115,21 @@ impl ClientStore for PostgresStore {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING commit_number",
       &[
-        &commit_attempt.aggregate_id.to_string(),
-        &commit_attempt.aggregate_version,
-        &commit_attempt.commit_id.to_string(),
+        &commit_attempt.aggregate_id,
+        &(commit_attempt.aggregate_version as i32),
+        &commit_attempt.commit_id,
         &commit_attempt.commit_timestamp,
-        &commit_attempt.commit_sequence,
-        &commit_attempt.events_count,
-        &commit_attempt.serialized_metadata,
-        &commit_attempt.serialized_events,
+        &(commit_attempt.commit_sequence as i32),
+        &(commit_attempt.events_count as i32),
+        &commit_attempt.metadata,
+        &commit_attempt.events,
       ]
     ) {
-      Ok(result) => Ok(result.get(0).expect("no commit row result").get(0)),
+      Ok(result) => result.get(0).expect("did not commit").get::<usize, i32>(0) as i64,
+      Err(err) => return Err(PostgresStoreError::from(err).into()),
+    };
+    match transaction.commit() {
+      Ok(_) => Ok(commit_number),
       Err(err) => Err(PostgresStoreError::from(err).into()),
     }
   }
@@ -157,9 +161,9 @@ impl ClientStore for PostgresStore {
         AND aggregate_version <= $2
         AND aggregate_id = $3;",
         &[
-          &min_version,
-          &max_version,
-          &aggregate_id.to_string()
+          &(min_version as i32),
+          &(max_version as i32),
+          &aggregate_id
         ]
     ) {
       Ok(rows) => rows,
@@ -167,7 +171,7 @@ impl ClientStore for PostgresStore {
     };
     Ok(
       rows.into_iter().map(|row| {
-        Commit {
+        DeserializedCommit {
           aggregate_id: row.get(0),
           aggregate_version: row.get(1),
           commit_id: row.get(2),
@@ -175,10 +179,10 @@ impl ClientStore for PostgresStore {
           commit_sequence: row.get(4),
           commit_number: row.get(5),
           events_count: row.get(6),
-          serialized_metadata: row.get(7),
-          serialized_events: row.get(8),
+          metadata: row.get(7),
+          events: row.get(8),
           dispatched: row.get(9),
-        }.deserialize()
+        }
       }).collect()
     )
   }
@@ -203,7 +207,7 @@ impl ClientStore for PostgresStore {
         FROM commits
         WHERE commit_id = $1
         ORDER BY commit_number ASC;",
-        &[&commit_id.to_string()]
+        &[&commit_id]
     ) {
       Ok(rows) => rows,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
@@ -211,18 +215,18 @@ impl ClientStore for PostgresStore {
     assert_eq!(1, rows.len());
     let row = rows.get(0).expect("query did not find any rows");
     Ok(
-      Commit {
+      DeserializedCommit {
         aggregate_id: row.get(0),
-        aggregate_version: row.get(1),
+        aggregate_version: row.get::<usize, i32>(1) as i64,
         commit_id: row.get(2),
         commit_timestamp: row.get(3),
-        commit_sequence: row.get(4),
-        commit_number: row.get(5),
-        events_count: row.get(6),
-        serialized_metadata: row.get(7),
-        serialized_events: row.get(8),
+        commit_sequence: row.get::<usize, i32>(4) as i64,
+        commit_number: row.get::<usize, i32>(5) as i64,
+        events_count: row.get::<usize, i32>(6) as i64,
+        metadata: row.get(7),
+        events: row.get(8),
         dispatched: row.get(9),
-      }.deserialize()
+      }
     )
   }
 }
@@ -254,18 +258,18 @@ impl Store for PostgresStore {
     };
     Ok(
       rows.into_iter().map(|row| {
-        Commit {
+        DeserializedCommit {
           aggregate_id: row.get(0),
-          aggregate_version: row.get(1),
+          aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),
           commit_timestamp: row.get(3),
-          commit_sequence: row.get(4),
-          commit_number: row.get(5),
-          events_count: row.get(6),
-          serialized_metadata: row.get(7),
-          serialized_events: row.get(8),
+          commit_sequence: row.get::<usize, i32>(4) as i64,
+          commit_number: row.get::<usize, i32>(5) as i64,
+          events_count: row.get::<usize, i32>(6) as i64,
+          metadata: row.get(7),
+          events: row.get(8),
           dispatched: row.get(9),
-        }.deserialize()
+        }
       }).collect()
     )
   }
@@ -276,6 +280,10 @@ impl Store for PostgresStore {
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
     match transaction.execute("UPDATE commits SET dispatched = 1 WHERE commit_id = $1", &[&commit_id.to_string()]) {
+      Ok(_) => (),
+      Err(err) => return Err(PostgresStoreError::from(err).into()),
+    };
+    match transaction.commit() {
       Ok(_) => Ok(()),
       Err(err) => Err(PostgresStoreError::from(err).into()),
     }

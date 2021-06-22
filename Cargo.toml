@@ -9,6 +9,7 @@ default = ["sqlite"]
 
 dynamo = ["rusoto_dynamodb", "rusoto_core", "tokio", "futures"]
 sqlite = ["rusqlite"]
+psql = ["postgres"]
 
 httpd = ["log", "dotenv", "warp", "futures", "tokio-timer", "hyper", "tokio"]
 httpc = ["hyper", "tokio", "futures"]
@@ -34,6 +35,8 @@ rusoto_core = { version = "~0.46.0", optional = true }
 rusoto_dynamodb = { version = "~0.46.0", optional = true }
 async-trait = "*"
 http = "*"
+
+postgres = { version = "0.19.1", optional = true, features = ["with-chrono-0_4", "with-uuid-0_8"] }
 
 [dependencies.chrono]
 version = "*"

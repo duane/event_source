@@ -37,6 +37,9 @@ extern crate log;
 #[cfg(feature = "sqlite")]
 extern crate rusqlite;
 
+#[cfg(feature = "psql")]
+extern crate postgres;
+
 /// Type representing the result of events.
 pub mod aggregate;
 

@@ -5,6 +5,10 @@ pub mod dynamodb;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 
+/// The postgres store
+#[cfg(feature = "psql")]
+pub mod postgres;
+
 use super::commit::{DeserializedCommit, CommitAttempt};
 use std::error;
 use std::fmt;

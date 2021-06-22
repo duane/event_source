@@ -9,7 +9,7 @@ pub mod sqlite;
 #[cfg(feature = "psql")]
 pub mod postgres;
 
-use super::commit::{DeserializedCommit, CommitAttempt};
+use super::commit::{Commit, CommitAttempt};
 use std::error;
 use std::fmt;
 use uuid::Uuid;
@@ -65,16 +65,16 @@ pub trait ClientStore: Sized {
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>>;
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 
   /// Get a single commit.
-  fn get_commit(&mut self, commit_it: &Uuid) -> Result<DeserializedCommit, Box<dyn StoreError>>;
+  fn get_commit(&mut self, commit_it: &Uuid) -> Result<Commit, Box<dyn StoreError>>;
 }
 
 /// A store for reading and writing events.
 pub trait Store: ClientStore {
   /// Get all commits which have not been marked as dispatched by some dispatcher.
-  fn get_undispatched_commits(&mut self) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>>;
+  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 
   /// Mark a single commit as having been dispatched.
   fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>>;

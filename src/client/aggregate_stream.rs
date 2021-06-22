@@ -1,7 +1,7 @@
 use crate::command::Command;
 use crate::client::applicable::EventApplicable;
 use crate::client::ClientError;
-use crate::commit::DeserializedCommit;
+use crate::commit::Commit;
 
 use either::Either;
 use uuid::Uuid;
@@ -28,7 +28,7 @@ impl<C: Command, P: CommandProcessor<C>> AggregateStream<C, P> {
 
   /// Fetch and apply the events producing the aggregate from the stream.
   pub fn sync(&mut self) -> Result<(), ClientError>  {
-    let commits: Vec<DeserializedCommit> = {
+    let commits: Vec<Commit> = {
       self
         .processor
         .get_range(self.aggregate_id, self.commit_sequence, i64::max_value())
@@ -50,7 +50,7 @@ impl<C: Command, P: CommandProcessor<C>> AggregateStream<C, P> {
   pub fn issue_command(
     &mut self,
     command: &C,
-  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
     self.processor.issue_command(&self.aggregate_id, command)
       .and_then(|commit| {
         self.sync().map_err(Either::Left).map(|_| commit)

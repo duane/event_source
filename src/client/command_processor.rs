@@ -1,4 +1,4 @@
-use crate::commit::DeserializedCommit;
+use crate::commit::Commit;
 use either::Either;
 use crate::command::Command;
 use crate::client::ClientError;
@@ -12,5 +12,5 @@ pub trait CommandProcessor<C: Command>: Sized + EventSource {
     &mut self,
     aggregate_id: &Uuid,
     command: &C
-  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>>;
+  ) -> Result<Commit, Either<ClientError, C::Error>>;
 }

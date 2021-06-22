@@ -1,4 +1,4 @@
-use crate::commit::DeserializedCommit;
+use crate::commit::Commit;
 use super::{StoreError, StoreErrorType};
 use uuid::Uuid;
 use std::error::Error;
@@ -84,7 +84,7 @@ impl EventSource for HttpStore {
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let response_body = rt.block_on(
@@ -107,7 +107,7 @@ impl EventSource for HttpStore {
 impl<C: Command> CommandProcessor<C> for HttpStore {
   /// Apply a command to an aggregate.
   fn issue_command(&mut self, aggregate_id: &Uuid, command: &C)
-    -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
+    -> Result<Commit, Either<ClientError, C::Error>> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let (status, response_body) = rt.block_on(
@@ -129,7 +129,7 @@ impl<C: Command> CommandProcessor<C> for HttpStore {
       return Err(either::Right(err));
     }
 
-    let commit: DeserializedCommit = serde_json::from_str(response_body.as_ref()).unwrap();
+    let commit: Commit = serde_json::from_str(response_body.as_ref()).unwrap();
     Ok(commit)
   }
 }

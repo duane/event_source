@@ -1,39 +1,6 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-/// A single commit in an event store.
-#[derive(Clone, Debug)]
-pub struct Commit {
-  /// The latest aggregate id. Monotonically increasing.
-  pub aggregate_id: Uuid,
-
-  /// The latest aggregate version. Monotonically increasing.
-  pub aggregate_version: i64,
-
-  /// The id of the commit. Monotonically increasing.
-  pub commit_id: Uuid,
-
-  /// The timestamp of the commit in UTC from the perspective of the store.
-  pub commit_timestamp: DateTime<Utc>,
-  /// The sequence of the commit. Monotonically increasing.
-  pub commit_sequence: i64,
-
-  /// The commit number. TODO: distinguish from sequence.
-  pub commit_number: i64,
-
-  /// The events, serialized to json, of the commit.
-  pub serialized_events: Vec<u8>,
-
-  /// The metadata, serialized to json, of the commit.
-  pub serialized_metadata: Vec<u8>,
-
-  /// The number of events serialized in the commit.
-  pub events_count: i64,
-
-  /// Whether or not the commit has been processed by the store's dispatcher.
-  pub dispatched: bool,
-}
-
 /// An attempt at a commit. This potential commit has not been written yet to the store.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommitAttempt {
@@ -66,7 +33,7 @@ pub struct CommitAttempt {
 
 /// A commit with the events deserialized.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct DeserializedCommit {
+pub struct Commit {
   /// Aggregate id.
   pub aggregate_id: Uuid,
 
@@ -96,26 +63,6 @@ pub struct DeserializedCommit {
 
   /// Whether or not the commit has been dispatched.
   pub dispatched: bool,
-}
-
-impl Commit {
-  /// Deserialize the events and metadata fields.
-  pub fn deserialize(&self) -> DeserializedCommit {
-    let events = serde_json::from_slice(self.serialized_events.as_slice()).unwrap();
-    let metadata = serde_json::from_slice(self.serialized_metadata.as_slice()).unwrap();
-    DeserializedCommit {
-      aggregate_id: self.aggregate_id,
-      aggregate_version: self.aggregate_version,
-      commit_id: self.commit_id,
-      commit_timestamp: self.commit_timestamp,
-      commit_number: self.commit_number,
-      commit_sequence: self.commit_sequence,
-      events,
-      metadata,
-      events_count: self.events_count,
-      dispatched: self.dispatched,
-    }
-  }
 }
 
 #[cfg(test)]

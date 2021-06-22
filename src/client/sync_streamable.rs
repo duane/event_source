@@ -1,7 +1,7 @@
 use crate::client::applicable::MutEventApplicable;
 use crate::client::event_source::EventSource;
 use uuid::Uuid;
-use crate::commit::DeserializedCommit;
+use crate::commit::Commit;
 
 /// A datatype that may be mutated with an event.
 pub trait SyncStreamable<S: EventSource>: MutEventApplicable {
@@ -21,7 +21,7 @@ pub trait SyncStreamable<S: EventSource>: MutEventApplicable {
   fn sync(&mut self) {
     let aggregate_id = self.aggregate_id().to_owned();
     let pos = self.pos();
-    let commits: Vec<DeserializedCommit> = {
+    let commits: Vec<Commit> = {
       self
         .store()
         .get_range(aggregate_id, pos, i64::max_value())

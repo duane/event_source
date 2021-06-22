@@ -127,7 +127,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     &mut self,
     aggregate_id: Uuid,
   ) -> Result<A, ClientError> {
-    let commits: Vec<DeserializedCommit> = {
+    let commits: Vec<Commit> = {
       self
         .store
         .get_range(aggregate_id, 0, i64::max_value())
@@ -153,7 +153,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
-  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.apply(aggregate).map_err(Either::Right)?;
     let events_count = aggregate_update_events.len() as i64;
@@ -181,7 +181,7 @@ impl<D: DispatchDelegate, S: Store> Client<D, S> {
     aggregate: &C::Aggregate,
     command: &C,
     metadata: &M,
-  ) -> Result<DeserializedCommit, Either<ClientError, C::Error>> {
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
     let aggregate_update_events: Vec<<<C as Command>::Aggregate as EventApplicable>::Event> =
       command.async_apply(aggregate).await.map_err(Either::Right)?;
       let events_count = aggregate_update_events.len() as i64;

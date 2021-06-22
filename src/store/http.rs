@@ -1,4 +1,4 @@
-use super::super::commit::{DeserializedCommit, CommitAttempt};
+use super::super::commit::{Commit, CommitAttempt};
 use super::{ClientStore, StoreError, StoreErrorType};
 use uuid::Uuid;
 use std::error::Error;
@@ -85,7 +85,7 @@ impl ClientStore for HttpStore {
       aggregate_id: Uuid,
       min_version: i64,
       max_version: i64,
-  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let response_body = rt.block_on(

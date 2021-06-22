@@ -1,10 +1,10 @@
-use super::commit::DeserializedCommit;
+use super::commit::Commit;
 use super::store::*;
 
 /// A type encoding logic for dispatching commits.
 pub trait DispatchDelegate: Sized {
   /// Process a single commit in commit_sequence order.
-  fn dispatch(&mut self, commit: &DeserializedCommit) -> Result<(), String>;
+  fn dispatch(&mut self, commit: &Commit) -> Result<(), String>;
 }
 
 /// A single dispatcher.
@@ -42,7 +42,7 @@ impl<D: DispatchDelegate> Dispatcher<D> {
 /// A dispatcher which does nothing.
 pub struct NullDispatcher;
 impl DispatchDelegate for NullDispatcher {
-  fn dispatch(&mut self, _commit: &DeserializedCommit) -> Result<(), String> {
+  fn dispatch(&mut self, _commit: &Commit) -> Result<(), String> {
     Ok(())
   }
 }

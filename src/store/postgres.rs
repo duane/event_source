@@ -1,4 +1,4 @@
-use super::super::commit::{DeserializedCommit, Commit, CommitAttempt};
+use super::super::commit::{Commit, CommitAttempt};
 use super::{ClientStore, Store, StoreError, StoreErrorType};
 use postgres::Client;
 use uuid::Uuid;
@@ -139,7 +139,7 @@ impl ClientStore for PostgresStore {
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
@@ -171,7 +171,7 @@ impl ClientStore for PostgresStore {
     };
     Ok(
       rows.into_iter().map(|row| {
-        DeserializedCommit {
+        Commit {
           aggregate_id: row.get(0),
           aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),
@@ -187,7 +187,7 @@ impl ClientStore for PostgresStore {
     )
   }
 
-  fn get_commit(&mut self, commit_id: &Uuid) -> Result<DeserializedCommit, Box<dyn StoreError>> {
+  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
@@ -215,7 +215,7 @@ impl ClientStore for PostgresStore {
     assert_eq!(1, rows.len());
     let row = rows.get(0).expect("query did not find any rows");
     Ok(
-      DeserializedCommit {
+      Commit {
         aggregate_id: row.get(0),
         aggregate_version: row.get::<usize, i32>(1) as i64,
         commit_id: row.get(2),
@@ -232,7 +232,7 @@ impl ClientStore for PostgresStore {
 }
 
 impl Store for PostgresStore {
-  fn get_undispatched_commits(&mut self) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>> {
+  fn get_undispatched_commits(&mut self) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
@@ -258,7 +258,7 @@ impl Store for PostgresStore {
     };
     Ok(
       rows.into_iter().map(|row| {
-        DeserializedCommit {
+        Commit {
           aggregate_id: row.get(0),
           aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),

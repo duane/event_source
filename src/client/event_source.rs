@@ -1,5 +1,5 @@
 use uuid::Uuid;
-use crate::commit::DeserializedCommit;
+use crate::commit::Commit;
 use crate::store::StoreError;
 
 /// A trait allowing committing, retrieving, and issuing commands.
@@ -19,5 +19,5 @@ pub trait EventSource: Sized {
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
-  ) -> Result<Vec<DeserializedCommit>, Box<dyn StoreError>>;
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 }

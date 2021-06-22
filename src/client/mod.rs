@@ -6,7 +6,6 @@ use crate::dispatch::*;
 use either::Either;
 use serde::Serialize;
 use serde_json::Error as JsonError;
-use serde_json::Serializer as JsonSerializer;
 use crate::store::*;
 use uuid::Uuid;
 use crate::client::applicable::EventApplicable;

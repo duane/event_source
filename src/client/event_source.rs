@@ -1,6 +1,6 @@
-use uuid::Uuid;
 use crate::commit::Commit;
 use crate::store::StoreError;
+use uuid::Uuid;
 
 /// A trait allowing committing, retrieving, and issuing commands.
 pub trait EventSource: Sized {

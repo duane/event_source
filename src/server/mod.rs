@@ -5,16 +5,16 @@ pub mod aggregate;
 pub mod store;
 
 use crate::command::Command;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use crate::server::aggregate::commit;
 use crate::server::aggregate::get_latest;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 // use crate::server::dispatch::WebSocketSubscriptions;
+use crate::dispatch::NullDispatcher;
 use crate::server::store::{commit_get, commit_list};
 use crate::store::Store;
-use warp::Filter;
 use log::info;
-use crate::dispatch::NullDispatcher;
+use warp::Filter;
 
 /// The HTTP server state itself.
 pub struct Server {

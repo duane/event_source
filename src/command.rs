@@ -1,11 +1,11 @@
 use super::aggregate::Aggregate;
+use crate::client::applicable::EventApplicable;
+use async_trait::async_trait;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::error::Error;
 use std::fmt::Debug;
-use async_trait::async_trait;
 use uuid::Uuid;
-use crate::client::applicable::EventApplicable;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
 
 #[async_trait]
 /// A single mutation to the event store.

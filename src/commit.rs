@@ -68,13 +68,15 @@ pub struct Commit {
 #[cfg(test)]
 mod tests {
   use super::Commit;
-  use uuid::Uuid;
   use chrono::Utc;
+  use uuid::Uuid;
   #[test]
   fn deserialize() {
     let serialized_events = b"[{\"foo\": \"bar\"}, {\"baz\": \"bat\"}]".to_vec();
-    let serialized_metadata = "[{\"foo2\": \"bar2\", \"baz2\": \"bat2\"}]".as_bytes().to_vec();
-    let commit = Commit{
+    let serialized_metadata = "[{\"foo2\": \"bar2\", \"baz2\": \"bat2\"}]"
+      .as_bytes()
+      .to_vec();
+    let commit = Commit {
       aggregate_id: Uuid::new_v4(),
       aggregate_version: 18,
       commit_id: Uuid::new_v4(),
@@ -103,11 +105,12 @@ mod tests {
     assert_eq!(events_array[0].as_object().unwrap()["foo"], "bar");
     assert_eq!(events_array[1].as_object().unwrap()["baz"], "bat");
 
-    let metadata_obj = deserialized.metadata.as_array().unwrap()[0].as_object().unwrap();
+    let metadata_obj = deserialized.metadata.as_array().unwrap()[0]
+      .as_object()
+      .unwrap();
     assert_eq!(metadata_obj.len(), 2);
     assert_eq!(metadata_obj["foo2"], "bar2");
     assert_eq!(metadata_obj["baz2"], "bat2");
     assert_eq!(events_array[0].as_object().unwrap()["foo"], "bar");
   }
-
 }

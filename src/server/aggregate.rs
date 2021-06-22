@@ -4,18 +4,17 @@ use crate::aggregate::Aggregate;
 use crate::client::ClientBuilder;
 use crate::command::Command;
 use crate::dispatch::{DispatchDelegate, NullDispatcher};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use crate::store::Store;
-use uuid::Uuid;
 use either::{Left, Right};
-use http::status::StatusCode;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 /// blah
 pub struct HttpErrorResponse {
   /// hah
-  pub error: serde_json::Value
+  pub error: serde_json::Value,
 }
 
 /// Fetch the latest aggregate for a uuid.
@@ -70,20 +69,21 @@ where
       let aggregate = client.fetch_latest(aggregate_id).unwrap();
 
       match client.issue_command(&aggregate, &command, &command) {
-        Ok(ref commit) => warp::reply::with_status(warp::reply::json(&commit), http::status::StatusCode::OK),
+        Ok(ref commit) => {
+          warp::reply::with_status(warp::reply::json(&commit), http::status::StatusCode::OK)
+        }
         Err(Left(error)) => warp::reply::with_status(
-          warp::reply::json(
-            &HttpErrorResponse{
-              error: serde_json::to_value(format!("{:#?}", error)).unwrap()
-            }),
-            http::status::StatusCode::UNPROCESSABLE_ENTITY),
+          warp::reply::json(&HttpErrorResponse {
+            error: serde_json::to_value(format!("{:#?}", error)).unwrap(),
+          }),
+          http::status::StatusCode::UNPROCESSABLE_ENTITY,
+        ),
         Err(Right(error)) => warp::reply::with_status(
-          warp::reply::json(
-            &HttpErrorResponse{
-              error: serde_json::to_value(error).unwrap()
-            }),
-            http::status::StatusCode::UNPROCESSABLE_ENTITY),
+          warp::reply::json(&HttpErrorResponse {
+            error: serde_json::to_value(error).unwrap(),
+          }),
+          http::status::StatusCode::UNPROCESSABLE_ENTITY,
+        ),
       }
-
     })
 }

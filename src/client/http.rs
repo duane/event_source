@@ -1,21 +1,21 @@
-use crate::commit::Commit;
 use super::{StoreError, StoreErrorType};
-use uuid::Uuid;
+use crate::client::command_processor::CommandProcessor;
+use crate::client::event_source::EventSource;
+use crate::client::ClientError;
+use crate::command::Command;
+use crate::commit::Commit;
+use crate::server::aggregate::HttpErrorResponse;
+use either::Either;
+use hyper::client::HttpConnector;
+use hyper::{body::Body, client::Client, Request, Uri};
+use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt;
-use hyper::{Request, body::Body, Uri, client::Client};
-use hyper::client::HttpConnector;
-use std::convert::TryFrom;
-use crate::client::event_source::EventSource;
-use crate::client::command_processor::CommandProcessor;
-use crate::command::Command;
-use either::Either;
-use crate::client::ClientError;
-use crate::server::aggregate::HttpErrorResponse;
+use uuid::Uuid;
 
 /// The store representing a sqlite connection.
 pub struct HttpStore {
-  client: Client<HttpConnector, Body>
+  client: Client<HttpConnector, Body>,
 }
 
 /// The errors returned by this store.
@@ -44,7 +44,10 @@ impl Into<Box<dyn StoreError>> for HttpStoreError {
   }
 }
 
-async fn issue_get(client: &mut Client<HttpConnector, Body>, uri: Uri) -> Result<String, hyper::Error> {
+async fn issue_get(
+  client: &mut Client<HttpConnector, Body>,
+  uri: Uri,
+) -> Result<String, hyper::Error> {
   let res = client.get(uri).await?;
   let buf = hyper::body::to_bytes(res).await?;
   let body = String::from_utf8(buf.into_iter().collect()).unwrap();
@@ -52,11 +55,16 @@ async fn issue_get(client: &mut Client<HttpConnector, Body>, uri: Uri) -> Result
   Ok(body)
 }
 
-async fn issue_post(client: &mut Client<HttpConnector, Body>, uri: Uri, body: serde_json::Value) -> Result<(http::status::StatusCode, String), hyper::Error> {
+async fn issue_post(
+  client: &mut Client<HttpConnector, Body>,
+  uri: Uri,
+  body: serde_json::Value,
+) -> Result<(http::status::StatusCode, String), hyper::Error> {
   let req = Request::builder()
     .method("POST")
     .uri(uri)
-    .body(Body::from(body.to_string())).unwrap();
+    .body(Body::from(body.to_string()))
+    .unwrap();
   let res = client.request(req).await?;
   let status = res.status();
 
@@ -87,41 +95,36 @@ impl EventSource for HttpStore {
   ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
-    let response_body = rt.block_on(
-      issue_get(
+    let response_body = rt
+      .block_on(issue_get(
         &mut self.client,
-        Uri::try_from(
-          format!(
-            "http://localhost:4321/store/{}/commits?from={}&to={}",
-            aggregate_id,
-            min_version,
-            max_version
-          )
-        ).unwrap()
-      )
-    ).unwrap();
+        Uri::try_from(format!(
+          "http://localhost:4321/store/{}/commits?from={}&to={}",
+          aggregate_id, min_version, max_version
+        ))
+        .unwrap(),
+      ))
+      .unwrap();
     Ok(serde_json::from_str(response_body.as_ref()).unwrap())
   }
 }
 
 impl<C: Command> CommandProcessor<C> for HttpStore {
   /// Apply a command to an aggregate.
-  fn issue_command(&mut self, aggregate_id: &Uuid, command: &C)
-    -> Result<Commit, Either<ClientError, C::Error>> {
+  fn issue_command(
+    &mut self,
+    aggregate_id: &Uuid,
+    command: &C,
+  ) -> Result<Commit, Either<ClientError, C::Error>> {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
-    let (status, response_body) = rt.block_on(
-      issue_post(
+    let (status, response_body) = rt
+      .block_on(issue_post(
         &mut self.client,
-        Uri::try_from(
-          format!(
-            "http://localhost:4321/commit/{}",
-            aggregate_id
-          )
-        ).unwrap(),
-        serde_json::to_value(command).unwrap()
-      )
-    ).unwrap();
+        Uri::try_from(format!("http://localhost:4321/commit/{}", aggregate_id)).unwrap(),
+        serde_json::to_value(command).unwrap(),
+      ))
+      .unwrap();
     if status == http::status::StatusCode::UNPROCESSABLE_ENTITY {
       let body: HttpErrorResponse = serde_json::from_str(response_body.as_ref()).unwrap();
       let err: C::Error = serde_json::from_value(body.error).unwrap();
@@ -133,5 +136,3 @@ impl<C: Command> CommandProcessor<C> for HttpStore {
     Ok(commit)
   }
 }
-
-

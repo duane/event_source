@@ -1,7 +1,7 @@
 use crate::client::applicable::MutEventApplicable;
 use crate::client::event_source::EventSource;
-use uuid::Uuid;
 use crate::commit::Commit;
+use uuid::Uuid;
 
 /// A datatype that may be mutated with an event.
 pub trait SyncStreamable<S: EventSource>: MutEventApplicable {

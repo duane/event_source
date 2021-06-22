@@ -1,6 +1,6 @@
+use crate::client::applicable::EventApplicable;
 use std::default::Default;
 use uuid::Uuid;
-use crate::client::applicable::EventApplicable;
 /// A data type for working with the result of events over time.
 ///
 /// This is generally used for working with the internal logic of Commands.

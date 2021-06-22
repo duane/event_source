@@ -7,19 +7,19 @@ extern crate bytes;
 extern crate chrono;
 extern crate either;
 
+extern crate async_trait;
+extern crate chashmap;
+extern crate pretty_env_logger;
 extern crate serde;
 extern crate serde_json;
 extern crate uuid;
-extern crate pretty_env_logger;
-extern crate chashmap;
-extern crate async_trait;
 
 #[macro_use]
 extern crate serde_derive;
-#[cfg(any(feature = "httpd", feature="httpc"))]
-extern crate hyper;
-#[cfg(any(feature = "httpd", feature="httpc"))]
+#[cfg(any(feature = "httpd", feature = "httpc"))]
 extern crate http;
+#[cfg(any(feature = "httpd", feature = "httpc"))]
+extern crate hyper;
 #[cfg(feature = "dynamo")]
 extern crate rusoto_core;
 #[cfg(feature = "dynamo")]

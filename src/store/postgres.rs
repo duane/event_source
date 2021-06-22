@@ -1,9 +1,9 @@
 use super::super::commit::{Commit, CommitAttempt};
 use super::{ClientStore, Store, StoreError, StoreErrorType};
 use postgres::Client;
-use uuid::Uuid;
 use std::error::Error;
 use std::fmt;
+use uuid::Uuid;
 
 /// The store representing a sqlite connection.
 pub struct PostgresStore {
@@ -13,12 +13,17 @@ pub struct PostgresStore {
 /// The errors returned by this store.
 #[derive(Debug)]
 pub struct PostgresStoreError {
-  cause: postgres::Error
+  cause: postgres::Error,
 }
 
 impl fmt::Display for PostgresStoreError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "SqliteStoreError({:}, {:})", self.error_type(), self.cause)
+    write!(
+      f,
+      "SqliteStoreError({:}, {:})",
+      self.error_type(),
+      self.cause
+    )
   }
 }
 
@@ -123,7 +128,7 @@ impl ClientStore for PostgresStore {
         &(commit_attempt.events_count as i32),
         &commit_attempt.metadata,
         &commit_attempt.events,
-      ]
+      ],
     ) {
       Ok(result) => result.get(0).expect("did not commit").get::<usize, i32>(0) as i64,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
@@ -160,18 +165,19 @@ impl ClientStore for PostgresStore {
         WHERE aggregate_version >= $1
         AND aggregate_version <= $2
         AND aggregate_id = $3;",
-        &[
-          &(min_version as i32),
-          &(std::cmp::min(max_version, i32::max_value() as i64) as i32),
-          &aggregate_id
-        ]
+      &[
+        &(min_version as i32),
+        &(std::cmp::min(max_version, i32::max_value() as i64) as i32),
+        &aggregate_id,
+      ],
     ) {
       Ok(rows) => rows,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
     Ok(
-      rows.into_iter().map(|row| {
-        Commit {
+      rows
+        .into_iter()
+        .map(|row| Commit {
           aggregate_id: row.get(0),
           aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),
@@ -182,8 +188,8 @@ impl ClientStore for PostgresStore {
           metadata: row.get(7),
           events: row.get(8),
           dispatched: row.get(9),
-        }
-      }).collect()
+        })
+        .collect(),
     )
   }
 
@@ -207,27 +213,25 @@ impl ClientStore for PostgresStore {
         FROM commits
         WHERE commit_id = $1
         ORDER BY commit_number ASC;",
-        &[&commit_id]
+      &[&commit_id],
     ) {
       Ok(rows) => rows,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
     assert_eq!(1, rows.len());
     let row = rows.get(0).expect("query did not find any rows");
-    Ok(
-      Commit {
-        aggregate_id: row.get(0),
-        aggregate_version: row.get::<usize, i32>(1) as i64,
-        commit_id: row.get(2),
-        commit_timestamp: row.get(3),
-        commit_sequence: row.get::<usize, i32>(4) as i64,
-        commit_number: row.get::<usize, i32>(5) as i64,
-        events_count: row.get::<usize, i32>(6) as i64,
-        metadata: row.get(7),
-        events: row.get(8),
-        dispatched: row.get(9),
-      }
-    )
+    Ok(Commit {
+      aggregate_id: row.get(0),
+      aggregate_version: row.get::<usize, i32>(1) as i64,
+      commit_id: row.get(2),
+      commit_timestamp: row.get(3),
+      commit_sequence: row.get::<usize, i32>(4) as i64,
+      commit_number: row.get::<usize, i32>(5) as i64,
+      events_count: row.get::<usize, i32>(6) as i64,
+      metadata: row.get(7),
+      events: row.get(8),
+      dispatched: row.get(9),
+    })
   }
 }
 
@@ -251,14 +255,16 @@ impl Store for PostgresStore {
           dispatched
         FROM commits
         WHERE dispatched = 0
-        ORDER BY commit_number ASC;", &[]
+        ORDER BY commit_number ASC;",
+      &[],
     ) {
       Ok(rows) => rows,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
     Ok(
-      rows.into_iter().map(|row| {
-        Commit {
+      rows
+        .into_iter()
+        .map(|row| Commit {
           aggregate_id: row.get(0),
           aggregate_version: row.get::<usize, i32>(1) as i64,
           commit_id: row.get(2),
@@ -269,8 +275,8 @@ impl Store for PostgresStore {
           metadata: row.get(7),
           events: row.get(8),
           dispatched: row.get(9),
-        }
-      }).collect()
+        })
+        .collect(),
     )
   }
 
@@ -279,7 +285,10 @@ impl Store for PostgresStore {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };
-    match transaction.execute("UPDATE commits SET dispatched = 1 WHERE commit_id = $1", &[&commit_id.to_string()]) {
+    match transaction.execute(
+      "UPDATE commits SET dispatched = 1 WHERE commit_id = $1",
+      &[&commit_id.to_string()],
+    ) {
       Ok(_) => (),
       Err(err) => return Err(PostgresStoreError::from(err).into()),
     };

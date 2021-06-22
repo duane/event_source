@@ -1,10 +1,10 @@
 use super::super::commit::{Commit, CommitAttempt};
-use super::{StorageCommitConflict, ClientStore, Store, StoreError, StoreErrorType};
+use super::{ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType};
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
-use std::path::Path;
-use uuid::Uuid;
 use std::error::Error;
 use std::fmt;
+use std::path::Path;
+use uuid::Uuid;
 
 /// The store representing a sqlite connection.
 pub struct SqliteStore {
@@ -14,12 +14,17 @@ pub struct SqliteStore {
 /// The errors returned by this store.
 #[derive(Debug)]
 pub struct SqliteStoreError {
-  cause: RusqliteError
+  cause: RusqliteError,
 }
 
 impl fmt::Display for SqliteStoreError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "SqliteStoreError({:}, {:})", self.error_type(), self.cause)
+    write!(
+      f,
+      "SqliteStoreError({:}, {:})",
+      self.error_type(),
+      self.cause
+    )
   }
 }
 
@@ -133,8 +138,10 @@ impl ClientStore for SqliteStore {
           &commit_attempt.commit_timestamp,
           &commit_attempt.commit_sequence,
           &commit_attempt.events_count,
-          &serde_json::to_string(&commit_attempt.metadata).expect("could not serialize metadata to string"),
-          &serde_json::to_string(&commit_attempt.events).expect("could not serialize events to string"),
+          &serde_json::to_string(&commit_attempt.metadata)
+            .expect("could not serialize metadata to string"),
+          &serde_json::to_string(&commit_attempt.events)
+            .expect("could not serialize events to string"),
         ]) {
           Ok(_) => (),
           Err(err) => return Err(SqliteStoreError::from(err).into()),
@@ -175,38 +182,40 @@ impl ClientStore for SqliteStore {
       Ok(result) => result,
       Err(err) => return Err(SqliteStoreError::from(err).into()),
     };
-    let rows = match stmt
-      .query_map(
-        &[
-          &min_version,
-          &max_version,
-          &aggregate_id.to_string() as &dyn ToSql,
-        ],
-        |row| {
-          let aggregate_id_str: String = row.get(0).expect("no aggregate_id result column");
-          let commit_id_str: String = row.get(2).expect("no commit_id result column");
-          let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
-          let metadata = serde_json::from_str(&metadata_string).expect("could not deserialize metadata string");
-          let events_string: String = row.get(8).expect("no serialized_metadat result column");
-          let events = serde_json::from_str(&events_string).expect("could not deserialize metadata string");
-          Ok(Commit {
-            aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref()).unwrap(),
-            aggregate_version: row.get(1).expect("no aggregate_version result column"),
-            commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
-            commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
-            commit_sequence: row.get(4).expect("no commit_sequence result column"),
-            commit_number: row.get(5).expect("no commit_number result column"),
-            events_count: row.get(6).expect("no events_count result column"),
-            metadata,
-            events,
-            dispatched: row.get(9).expect("no dispatched result column"),
-          })
-        },
-      ) {
-        Ok(result) => result,
-        Err(err) => return Err(SqliteStoreError::from(err).into()),
-      }.map(|row| row.unwrap())
-      .collect();
+    let rows = match stmt.query_map(
+      &[
+        &min_version,
+        &max_version,
+        &aggregate_id.to_string() as &dyn ToSql,
+      ],
+      |row| {
+        let aggregate_id_str: String = row.get(0).expect("no aggregate_id result column");
+        let commit_id_str: String = row.get(2).expect("no commit_id result column");
+        let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
+        let metadata =
+          serde_json::from_str(&metadata_string).expect("could not deserialize metadata string");
+        let events_string: String = row.get(8).expect("no serialized_metadat result column");
+        let events =
+          serde_json::from_str(&events_string).expect("could not deserialize metadata string");
+        Ok(Commit {
+          aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref()).unwrap(),
+          aggregate_version: row.get(1).expect("no aggregate_version result column"),
+          commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
+          commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
+          commit_sequence: row.get(4).expect("no commit_sequence result column"),
+          commit_number: row.get(5).expect("no commit_number result column"),
+          events_count: row.get(6).expect("no events_count result column"),
+          metadata,
+          events,
+          dispatched: row.get(9).expect("no dispatched result column"),
+        })
+      },
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    }
+    .map(|row| row.unwrap())
+    .collect();
     Ok(rows)
   }
 
@@ -234,9 +243,11 @@ impl ClientStore for SqliteStore {
       let aggregate_id: String = row.get(0).expect("no aggregate_id column in result row");
       let commit_id: String = row.get(2).expect("no commit_id column in result row");
       let metadata_string: String = row.get(7).expect("no serialized_metadats result column");
-      let metadata = serde_json::from_str(&metadata_string).expect("could not deserialize metadata string");
+      let metadata =
+        serde_json::from_str(&metadata_string).expect("could not deserialize metadata string");
       let events_string: String = row.get(8).expect("no serialized_events result column");
-      let events = serde_json::from_str(&events_string).expect("could not deserialize metadata string");
+      let events =
+        serde_json::from_str(&events_string).expect("could not deserialize metadata string");
       Ok(Commit {
         aggregate_id: Uuid::parse_str(aggregate_id.as_ref()).unwrap(),
         aggregate_version: row
@@ -319,10 +330,11 @@ impl Store for SqliteStore {
   fn mark_commit_as_dispatched(&mut self, commit_id: Uuid) -> Result<(), Box<dyn StoreError>> {
     let mut statement = match self
       .conn
-      .prepare("UPDATE commits SET dispatched = 1 WHERE commit_id = ?") {
-        Ok(result) => result,
-        Err(err) => return Err(SqliteStoreError::from(err).into()),
-      };
+      .prepare("UPDATE commits SET dispatched = 1 WHERE commit_id = ?")
+    {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
     match statement.execute(&[&commit_id.to_string()]) {
       Ok(_) => (),
       Err(err) => return Err(SqliteStoreError::from(err).into()),

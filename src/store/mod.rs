@@ -45,12 +45,6 @@ pub trait StoreError: error::Error {
 
 /// A trait allowing committing and retrieving, but not dispatching.
 pub trait ClientStore: Sized {
-  /// The backing database state.
-  type Connection;
-
-  /// Back the store with the given connection.
-  fn with_connection(connection: Self::Connection) -> Self;
-
   /// Write a commit to a store.
   ///
   /// If the commit succeeds, this will return an immutable commit representing a set of events that have occurred.

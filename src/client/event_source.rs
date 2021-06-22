@@ -5,10 +5,10 @@ use uuid::Uuid;
 /// A trait allowing committing, retrieving, and issuing commands.
 pub trait EventSource: Sized {
   /// The backing database state.
-  type Connection;
+  // type Connection;
 
   /// Back the store with the given connection.
-  fn with_connection(connection: Self::Connection) -> Self;
+  // fn with_connection(connection: Self::Connection) -> Self;
 
   /// Get a sequence of events specific to the aggregate id.
   ///

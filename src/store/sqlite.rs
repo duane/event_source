@@ -11,6 +11,12 @@ pub struct SqliteStore {
   conn: RusqliteConnection,
 }
 
+impl SqliteStore {
+  fn with_connection(connection: RusqliteConnection) -> Self {
+    SqliteStore { conn: connection }
+  }
+}
+
 /// The errors returned by this store.
 #[derive(Debug)]
 pub struct SqliteStoreError {
@@ -107,12 +113,6 @@ impl StoreError for SqliteStoreError {
 }
 
 impl ClientStore for SqliteStore {
-  type Connection = RusqliteConnection;
-
-  fn with_connection(connection: Self::Connection) -> Self {
-    SqliteStore { conn: connection }
-  }
-
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     {
       {

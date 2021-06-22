@@ -19,8 +19,6 @@ pub struct HttpStoreError {
   // cause: RusqliteError
 }
 
-
-
 impl fmt::Display for HttpStoreError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "HttpStoreError({:})", self.error_type())
@@ -69,12 +67,6 @@ impl StoreError for HttpStoreError {
 }
 
 impl ClientStore for HttpStore {
-  type Connection = hyper::client::Client<HttpConnector, hyper::body::Body>;
-
-  fn with_connection(connection: Self::Connection) -> Self {
-    HttpStore { client: connection }
-  }
-
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
 
     todo!()

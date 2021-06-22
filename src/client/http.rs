@@ -6,8 +6,7 @@ use crate::command::Command;
 use crate::commit::Commit;
 use crate::server::aggregate::HttpErrorResponse;
 use either::Either;
-use hyper::client::HttpConnector;
-use hyper::{body::Body, client::Client, Request, Uri};
+use hyper::{Request, Uri, client::{Client, HttpConnector}, body::Body};
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt;
@@ -16,6 +15,12 @@ use uuid::Uuid;
 /// The store representing a sqlite connection.
 pub struct HttpStore {
   client: Client<HttpConnector, Body>,
+}
+
+impl HttpStore {
+  fn with_connection(connection: Client<HttpConnector, hyper::body::Body>) -> Self {
+    HttpStore { client: connection }
+  }
 }
 
 /// The errors returned by this store.
@@ -81,12 +86,6 @@ impl StoreError for HttpStoreError {
 }
 
 impl EventSource for HttpStore {
-  type Connection = hyper::client::Client<HttpConnector, hyper::body::Body>;
-
-  fn with_connection(connection: Self::Connection) -> Self {
-    HttpStore { client: connection }
-  }
-
   fn get_range(
     &mut self,
     aggregate_id: Uuid,

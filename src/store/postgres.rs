@@ -10,6 +10,12 @@ pub struct PostgresStore {
   client: Client,
 }
 
+impl PostgresStore {
+  fn with_connection(connection: Client) -> Self {
+    PostgresStore { client: connection }
+  }
+}
+
 /// The errors returned by this store.
 #[derive(Debug)]
 pub struct PostgresStoreError {
@@ -96,12 +102,6 @@ impl StoreError for PostgresStoreError {
 }
 
 impl ClientStore for PostgresStore {
-  type Connection = Client;
-
-  fn with_connection(connection: Self::Connection) -> Self {
-    PostgresStore { client: connection }
-  }
-
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,

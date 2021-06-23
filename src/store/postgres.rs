@@ -116,7 +116,7 @@ impl ClientStore for PostgresStore {
     }
   }
 
-  fn get_range(
+  fn get_aggregate_range(
     &mut self,
     aggregate_id: Uuid,
     min_version: i64,
@@ -170,7 +170,58 @@ impl ClientStore for PostgresStore {
     )
   }
 
-  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
+  fn get_range(
+    &mut self,
+    min_commit_number: i64,
+    max_commit_number: i64,
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+    let mut transaction = match self.client.transaction() {
+      Ok(result) => result,
+      Err(err) => return Err(PostgresStoreError::from(err).into()),
+    };
+    let rows = match transaction.query(
+      "SELECT
+          aggregate_id,
+          aggregate_version,
+          commit_id,
+          commit_timestamp,
+          commit_sequence,
+          commit_number,
+          events_count,
+          metadata,
+          events,
+          dispatched
+        FROM commits
+        WHERE commit_number > $1
+        AND commit_number <= $2;",
+      &[
+        &(min_commit_number as i32),
+        &(std::cmp::min(max_commit_number, i32::max_value() as i64) as i32),
+      ],
+    ) {
+      Ok(rows) => rows,
+      Err(err) => return Err(PostgresStoreError::from(err).into()),
+    };
+    Ok(
+      rows
+        .into_iter()
+        .map(|row| Commit {
+          aggregate_id: row.get(0),
+          aggregate_version: row.get::<usize, i32>(1) as i64,
+          commit_id: row.get(2),
+          commit_timestamp: row.get(3),
+          commit_sequence: row.get::<usize, i32>(4) as i64,
+          commit_number: row.get::<usize, i32>(5) as i64,
+          events_count: row.get::<usize, i32>(6) as i64,
+          metadata: row.get(7),
+          events: row.get(8),
+          dispatched: row.get(9),
+        })
+        .collect(),
+    )
+  }
+
+  fn get_commit(&mut self, since_commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),

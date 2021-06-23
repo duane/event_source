@@ -72,7 +72,7 @@ impl ClientStore for HttpStore {
     todo!()
   }
 
-  fn get_range(
+  fn get_aggregate_range(
       &mut self,
       aggregate_id: Uuid,
       min_version: i64,

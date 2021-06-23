@@ -57,11 +57,21 @@ pub trait ClientStore {
   ///
   /// Because the minimum and maximum bounds are passed, you may get zero commits.
   /// Getting all commits between 0 and the latest commit id should retrieve all events associated with the aggregate.
-  fn get_range(
+  fn get_aggregate_range(
     &mut self,
     aggregate_id: Uuid,
     min_version: i64,
     max_version: i64,
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
+
+  /// Get a sequence of events specific to the aggregate id.
+  ///
+  /// Because the minimum and maximum bounds are passed, you may get zero commits.
+  /// Getting all commits between 0 and the latest commit id should retrieve all events associated with the aggregate.
+  fn get_range(
+    &mut self,
+    min_commit_number: i64,
+    max_commit_number: i64,
   ) -> Result<Vec<Commit>, Box<dyn StoreError>>;
 
   /// Get a single commit.

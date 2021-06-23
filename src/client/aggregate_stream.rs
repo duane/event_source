@@ -31,7 +31,7 @@ impl<C: Command, P: CommandProcessor<C>> AggregateStream<C, P> {
     let commits: Vec<Commit> = {
       self
         .processor
-        .get_range(self.aggregate_id, self.commit_sequence, i64::max_value())
+        .get_aggregate_range(self.aggregate_id, self.commit_sequence, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
     for commit in commits {

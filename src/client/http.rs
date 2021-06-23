@@ -87,7 +87,7 @@ impl StoreError for HttpStoreError {
 }
 
 impl EventSource for HttpStore {
-  fn get_range(
+  fn get_aggregate_range(
     &mut self,
     aggregate_id: Uuid,
     min_version: i64,

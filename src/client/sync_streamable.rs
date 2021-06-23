@@ -24,7 +24,7 @@ pub trait SyncStreamable<S: EventSource>: MutEventApplicable {
     let commits: Vec<Commit> = {
       self
         .store()
-        .get_range(aggregate_id, pos, i64::max_value())
+        .get_aggregate_range(aggregate_id, pos, i64::max_value())
         .unwrap()
     };
 

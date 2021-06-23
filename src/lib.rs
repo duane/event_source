@@ -16,22 +16,8 @@ extern crate uuid;
 
 #[macro_use]
 extern crate serde_derive;
-#[cfg(any(feature = "httpd", feature = "httpc"))]
-extern crate http;
-#[cfg(any(feature = "httpd", feature = "httpc"))]
-extern crate hyper;
-#[cfg(feature = "dynamo")]
-extern crate rusoto_core;
-#[cfg(feature = "dynamo")]
-extern crate rusoto_dynamodb;
-#[cfg(feature = "httpd")]
-extern crate tokio_timer;
-#[cfg(feature = "httpd")]
-extern crate warp;
 
-#[cfg(any(feature = "httpd", feature = "dynamo"))]
-extern crate futures;
-#[cfg(feature = "httpd")]
+extern crate tokio;
 extern crate log;
 
 #[cfg(feature = "sqlite")]
@@ -61,12 +47,11 @@ pub mod commit;
 /// Type representing notification of events.
 pub mod dispatch;
 
+/// A dispatch for asynchronous subscription.
+pub mod dispatch_async;
+
 /// Type representing single events.
 pub mod events;
 
 /// Type representing the service that stores events over time.
 pub mod store;
-
-#[cfg(feature = "httpd")]
-/// The HTTP server.
-pub mod server;

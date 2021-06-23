@@ -117,7 +117,7 @@ impl<D: DispatchDelegate> ClientBuilder<D> {
 impl<D: DispatchDelegate> Client<D> {
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     let commit_number = self.store.as_mut().commit(commit_attempt)?;
-    // let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
+    let _unhandled_result = self.dispatcher.dispatch(self.store.as_mut());
     Ok(commit_number)
   }
 
@@ -125,7 +125,7 @@ impl<D: DispatchDelegate> Client<D> {
   pub fn fetch_latest<A: Aggregate>(&mut self, aggregate_id: Uuid) -> Result<A, ClientError> {
     let commits: Vec<Commit> = {
       self.store.as_mut()
-        .get_range(aggregate_id, 0, i64::max_value())
+        .get_aggregate_range(aggregate_id, 0, i64::max_value())
         .map_err(ClientError::StoreError)?
     };
     let mut aggregate: A = Default::default();
@@ -200,121 +200,5 @@ impl<D: DispatchDelegate> Client<D> {
       .and_then(|_| self.store.as_mut().get_commit(&commit_attempt.commit_id))
       .map_err(ClientError::StoreError)
       .map_err(Either::Left)
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::super::events::Event;
-  use super::super::store::sqlite::SqliteStore;
-  use super::*;
-  use crate::client::applicable::EventApplicable;
-  use chrono::Utc;
-  use std::default::Default;
-  use uuid::Uuid;
-
-  struct MockDispatcher {
-    dispatched_id: Option<Uuid>,
-  }
-
-  impl DispatchDelegate for MockDispatcher {
-    fn dispatch(&mut self, commit: &Commit) -> Result<(), String> {
-      self.dispatched_id = Some(commit.commit_id);
-      Ok(())
-    }
-  }
-
-  #[derive(Serialize, Deserialize, Debug)]
-  enum MockEvent {
-    IncrementVersion,
-  }
-
-  impl Event for MockEvent {}
-
-  #[derive(Default, Clone, Debug)]
-  struct MockAggregate {
-    id: Uuid,
-    version: i64,
-  }
-
-  impl EventApplicable for MockAggregate {
-    type Event = MockEvent;
-
-    fn apply(&self, _event: &Self::Event) -> MockAggregate {
-      MockAggregate {
-        id: self.id,
-        version: self.version + 1,
-      }
-    }
-  }
-
-  impl Aggregate for MockAggregate {
-    fn with_id(id: Uuid) -> Self {
-      MockAggregate { id, version: 0 }
-    }
-
-    fn version(&self) -> i64 {
-      self.version
-    }
-
-    fn id(&self) -> Uuid {
-      self.id
-    }
-  }
-
-  #[test]
-  fn it_requires_store_and_dispatcher() {
-    assert!(ClientBuilder::<MockDispatcher, SqliteStore>::default()
-      .finish()
-      .is_err());
-    let dispatch_delegate = MockDispatcher {
-      dispatched_id: None,
-    };
-    assert_eq!(
-      "Cannot build a client; missing a store.",
-      ClientBuilder::<MockDispatcher, SqliteStore>::default()
-        .with_dispatch_delegate(dispatch_delegate)
-        .finish()
-        .err()
-        .unwrap()
-    );
-    assert_eq!(
-      "Cannot build a client; missing a dispatcher.",
-      ClientBuilder::<MockDispatcher, SqliteStore>::default()
-        .with_store(SqliteStore::with_new_in_memory_connection())
-        .finish()
-        .err()
-        .unwrap()
-    );
-  }
-
-  #[test]
-  fn it_dispatches() {
-    let dispatch_delegate = MockDispatcher {
-      dispatched_id: None,
-    };
-    let store = SqliteStore::with_new_in_memory_connection();
-    store.initialize();
-    let mut client = ClientBuilder::<MockDispatcher, SqliteStore>::default()
-      .with_store(store)
-      .with_dispatch_delegate(dispatch_delegate)
-      .finish()
-      .unwrap();
-    let commit_id = Uuid::new_v4();
-    let commit_attempt = CommitAttempt {
-      aggregate_id: Uuid::new_v4(),
-      aggregate_version: 0,
-      commit_id,
-      commit_sequence: 0,
-      commit_timestamp: Utc::now(),
-      events_count: 1,
-      serialized_metadata: String::from("\"metadata\"").into_bytes(),
-      serialized_events: String::from("[\"hi\"]").into_bytes(),
-    };
-    assert!(client.commit(&commit_attempt).is_ok());
-    assert_eq!(
-      Some(commit_id),
-      client.dispatcher.dispatch_delegate.dispatched_id
-    );
   }
 }

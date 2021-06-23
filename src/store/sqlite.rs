@@ -135,7 +135,7 @@ impl ClientStore for SqliteStore {
     Ok(self.conn.last_insert_rowid())
   }
 
-  fn get_range(
+  fn get_aggregate_range(
     &mut self,
     aggregate_id: Uuid,
     min_version: i64,
@@ -166,6 +166,66 @@ impl ClientStore for SqliteStore {
         &min_version,
         &max_version,
         &aggregate_id.to_string() as &dyn ToSql,
+      ],
+      |row| {
+        let aggregate_id_str: String = row.get(0).expect("no aggregate_id result column");
+        let commit_id_str: String = row.get(2).expect("no commit_id result column");
+        let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
+        let metadata =
+          serde_json::from_str(&metadata_string).expect("could not deserialize metadata string");
+        let events_string: String = row.get(8).expect("no serialized_metadat result column");
+        let events =
+          serde_json::from_str(&events_string).expect("could not deserialize metadata string");
+        Ok(Commit {
+          aggregate_id: Uuid::parse_str(aggregate_id_str.as_ref()).unwrap(),
+          aggregate_version: row.get(1).expect("no aggregate_version result column"),
+          commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
+          commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
+          commit_sequence: row.get(4).expect("no commit_sequence result column"),
+          commit_number: row.get(5).expect("no commit_number result column"),
+          events_count: row.get(6).expect("no events_count result column"),
+          metadata,
+          events,
+          dispatched: row.get(9).expect("no dispatched result column"),
+        })
+      },
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    }
+    .map(|row| row.unwrap())
+    .collect();
+    Ok(rows)
+  }
+
+  fn get_range(
+    &mut self,
+    min_commit_number: i64,
+    max_commit_number: i64,
+  ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+    let mut stmt = match self.conn.prepare(
+      "SELECT
+          aggregate_id,
+          aggregate_version,
+          commit_id,
+          commit_timestamp,
+          commit_sequence,
+          commit_number,
+          events_count,
+          metadata,
+          events,
+          dispatched
+        FROM commits
+        WHERE commit_number > ?
+        AND commit_number <= ?;",
+    ) {
+      Ok(result) => result,
+      Err(err) => return Err(SqliteStoreError::from(err).into()),
+    };
+    let rows = match stmt.query_map(
+      &[
+        &min_commit_number,
+        &max_commit_number,
       ],
       |row| {
         let aggregate_id_str: String = row.get(0).expect("no aggregate_id result column");
@@ -372,7 +432,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
+    let commits = s.get_aggregate_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -393,7 +453,7 @@ mod tests {
     };
     assert_eq!(s.commit(&commit_attempt2).unwrap(), 2);
 
-    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
+    let commits = s.get_aggregate_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -421,7 +481,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
+    let commits = s.get_aggregate_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -462,7 +522,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
+    let commits = s.get_aggregate_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()
@@ -502,7 +562,7 @@ mod tests {
       serialized_events: String::from("[\"hi\"]").into_bytes(),
     };
     assert_eq!(s.commit(&commit_attempt).unwrap(), 1);
-    let commits = s.get_range(commit_attempt.aggregate_id, 0, 2).unwrap();
+    let commits = s.get_aggregate_range(commit_attempt.aggregate_id, 0, 2).unwrap();
     assert_eq!(
       commits
         .iter()

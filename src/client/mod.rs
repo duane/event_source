@@ -25,9 +25,8 @@ pub mod event_source;
 /// command processor
 pub mod command_processor;
 
-/// The HTTP-backed store
-#[cfg(feature = "httpc")]
-pub mod http;
+/// async dispatch wip
+pub mod client_async;
 
 /// State used in construction of client.
 pub struct ClientBuilder<D: DispatchDelegate> {
@@ -117,7 +116,7 @@ impl<D: DispatchDelegate> ClientBuilder<D> {
 impl<D: DispatchDelegate> Client<D> {
   fn commit(&mut self, commit_attempt: &CommitAttempt) -> Result<i64, Box<dyn StoreError>> {
     let commit_number = self.store.as_mut().commit(commit_attempt)?;
-    let _unhandled_result = self.dispatcher.dispatch(self.store.as_mut());
+    // let _unhandled_result = self.dispatcher.dispatch(&mut self.store);
     Ok(commit_number)
   }
 

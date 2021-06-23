@@ -1,25 +1,28 @@
 use super::commit::Commit;
 use super::store::*;
-use super::events::Event;
 use tokio::sync::mpsc::{Sender, channel, Receiver};
 
 /// A single dispatcher.
-pub struct AsyncAggregateDispatcher {
+pub struct AsyncDispatcher {
   subscribers: Vec<Sender<Commit>>,
   store: Box<dyn Store>,
 }
 
-trait Dispatcher {
+/// A type used to distribute updates to (many) subscribers.
+pub trait Dispatcher {
+  /// Trigger a dispatch—send all undispatched commits.
   fn dispatch(&mut self) -> Result<(), String>;
+
+  /// Subscribe to all commits following the one indicated in the commit number.
   fn subscribe(&mut self, commit_number: i64) -> Result<Receiver<Commit>, String>;
 }
 
-impl Dispatcher for AsyncAggregateDispatcher {
+impl Dispatcher for AsyncDispatcher {
   /// Dispatch a single commit and update the store on success.
   ///
   /// If the delegate returns Ok, the store is instructed to mark the commit as dispatched.
   /// This is not atomic. The dispatcher should be designed to potentially process commits twice.
-  fn dispatch(&mut self) -> Result<(), String> {
+ fn dispatch(&mut self) -> Result<(), String> {
     let commits = self.store.as_mut()
       .get_undispatched_commits()
       .map_err(|err| err.to_string())?;
@@ -47,10 +50,10 @@ impl Dispatcher for AsyncAggregateDispatcher {
   }
 }
 
-impl AsyncAggregateDispatcher {
+impl AsyncDispatcher {
   /// Create a new dispatcher from a delegate.
-  pub fn new(store: Box<dyn Store>) -> AsyncAggregateDispatcher {
-    AsyncAggregateDispatcher { subscribers: vec![], store }
+  pub fn new(store: Box<dyn Store>) -> AsyncDispatcher {
+    AsyncDispatcher { subscribers: vec![], store }
   }
 
   fn dispatch_single(&mut self, commit: &Commit) -> Result<(), String> {

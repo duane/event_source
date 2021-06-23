@@ -1,5 +1,5 @@
-use super::super::commit::{Commit, CommitAttempt};
-use super::{ClientStore, Store, StoreError, StoreErrorType};
+use crate::commit::{Commit, CommitAttempt};
+use crate::store::{ClientStore, Store, StoreError, StoreErrorType};
 use postgres::Client;
 use std::error::Error;
 use std::fmt;
@@ -221,7 +221,7 @@ impl ClientStore for PostgresStore {
     )
   }
 
-  fn get_commit(&mut self, since_commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
+  fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
     let mut transaction = match self.client.transaction() {
       Ok(result) => result,
       Err(err) => return Err(PostgresStoreError::from(err).into()),
